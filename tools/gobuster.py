@@ -1,17 +1,15 @@
+import re
 import subprocess
 from langchain_core.tools import tool
 from security import validar_alvo
 
 WORDLISTS_PERMITIDAS = {
-    "common":   "/usr/share/dirb/wordlists/common.txt",
-    "small":    "/usr/share/dirb/wordlists/small.txt",
-    "big":      "/usr/share/dirb/wordlists/big.txt",
-    "medium":   "/usr/share/dirbuster/wordlists/directory-list-2.3-medium.txt",
+    "common": "/usr/share/dirb/wordlists/common.txt",
+    "small":  "/usr/share/dirb/wordlists/small.txt",
+    "big":    "/usr/share/dirb/wordlists/big.txt",
 }
 
 EXTENSOES_VALIDAS = re.compile(r"^[a-zA-Z0-9,]{1,50}$")
-
-import re
 
 
 @tool
