@@ -12,7 +12,8 @@ Você
       ├── Agente Headers    → análise de headers HTTP e conformidade OWASP
       ├── Agente Gobuster   → enumeração de diretórios e arquivos ocultos
       ├── Agente Nikto      → varredura de vulnerabilidades e CVEs
-      └── Agente WhatWeb    → fingerprinting de stack tecnológico
+      ├── Agente WhatWeb    → fingerprinting de stack tecnológico
+      └── Agente Subfinder  → enumeração passiva de subdomínios
 ```
 
 | Arquivo | Responsabilidade |
@@ -34,6 +35,7 @@ Você
 | **Gobuster** | Diretórios e arquivos ocultos | small / common / medium / big (SecLists) |
 | **Nikto** | CVEs, misconfigurações de servidor | — |
 | **WhatWeb** | CMS, frameworks, bibliotecas, stack | agressividade 1–3 |
+| **Subfinder** | Enumeração passiva de subdomínios | fontes: DNS, cert transparency, APIs públicas |
 
 ## Pré-requisitos
 

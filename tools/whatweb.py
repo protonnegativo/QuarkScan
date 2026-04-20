@@ -1,6 +1,7 @@
 import subprocess
 from langchain_core.tools import tool
 from security import validar_alvo
+import storage
 
 
 @tool
@@ -31,8 +32,9 @@ def executar_whatweb(alvo: str, agressividade: int = 1) -> str:
 
     try:
         resultado = subprocess.run(comando, capture_output=True, text=True, timeout=60)
-        saida = resultado.stdout.strip()
-        return saida if saida else "WhatWeb não detectou tecnologias."
+        saida = resultado.stdout.strip() or "WhatWeb não detectou tecnologias."
+        storage.salvar(alvo_limpo, "whatweb", saida, {"agressividade": nivel})
+        return saida
     except subprocess.TimeoutExpired:
         return "Erro: timeout atingido (60s)."
     except FileNotFoundError:

@@ -1,6 +1,7 @@
 import subprocess
 from langchain_core.tools import tool
 from security import validar_alvo
+import storage
 
 
 @tool
@@ -36,8 +37,9 @@ def executar_nikto(alvo: str, porta: str = "443", ssl: bool = True) -> str:
 
     try:
         resultado = subprocess.run(comando, capture_output=True, text=True, timeout=180)
-        saida = resultado.stdout.strip()
-        return saida if saida else resultado.stderr or "Nikto não retornou resultados."
+        saida = resultado.stdout.strip() or resultado.stderr or "Nikto não retornou resultados."
+        storage.salvar(alvo_limpo, "nikto", saida, {"porta": porta, "ssl": ssl})
+        return saida
     except subprocess.TimeoutExpired:
         return "Erro: timeout atingido (180s)."
     except FileNotFoundError:

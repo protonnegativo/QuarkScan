@@ -2,6 +2,7 @@ import re
 import subprocess
 from langchain_core.tools import tool
 from security import validar_alvo
+import storage
 
 WORDLISTS_PERMITIDAS = {
     "small":  "/usr/share/dirb/wordlists/small.txt",
@@ -47,8 +48,9 @@ def executar_gobuster(alvo: str, wordlist: str = "common", extensoes: str = "") 
 
     try:
         resultado = subprocess.run(comando, capture_output=True, text=True, timeout=300)
-        saida = resultado.stdout.strip()
-        return saida if saida else "Nenhum diretório encontrado com esta wordlist."
+        saida = resultado.stdout.strip() or "Nenhum diretório encontrado com esta wordlist."
+        storage.salvar(alvo_limpo, "gobuster", saida, {"wordlist": wordlist, "extensoes": extensoes})
+        return saida
     except subprocess.TimeoutExpired:
         return "Erro: timeout atingido (300s). Tente uma wordlist menor."
     except FileNotFoundError:

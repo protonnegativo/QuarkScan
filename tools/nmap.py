@@ -1,6 +1,7 @@
 import subprocess
 from langchain_core.tools import tool
 from security import FLAGS_PERMITIDAS, validar_args, validar_alvo
+import storage
 
 
 @tool
@@ -31,7 +32,9 @@ def executar_nmap(alvo: str, argumentos: str) -> str:
 
     try:
         resultado = subprocess.run(comando, capture_output=True, text=True, timeout=300)
-        return resultado.stdout or resultado.stderr
+        saida = resultado.stdout or resultado.stderr
+        storage.salvar(alvo_limpo, "nmap", saida, {"argumentos": argumentos})
+        return saida
     except subprocess.TimeoutExpired:
         return "Erro: timeout atingido (300s). Tente um scan mais focado em menos portas."
     except Exception as e:

@@ -2,6 +2,7 @@ import requests
 import urllib3
 from langchain_core.tools import tool
 from security import validar_alvo
+import storage
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -29,10 +30,12 @@ def analisar_headers(alvo: str) -> str:
 
         faltantes = [h for h in OWASP_HEADERS if h.lower() not in [k.lower() for k in headers.keys()]]
 
-        return (
+        saida = (
             f"ALVO: {url}\n\n"
             f"HEADERS ENCONTRADOS:\n{raw}\n\n"
             f"AVISO: Headers OWASP faltando: {', '.join(faltantes) if faltantes else 'Nenhum ✅'}"
         )
+        storage.salvar(alvo_limpo, "headers", saida)
+        return saida
     except Exception as e:
         return str(e)

@@ -20,4 +20,5 @@ fi
 echo -e "${GREEN}[+] Iniciando Agente de IA Isolado...${NC}"
 echo -e "${GREEN}------------------------------------------${NC}"
 
-docker run -it --rm --env-file .env ia-nmap-agent
+mkdir -p data
+docker run -it --rm --env-file .env -v "$(pwd)/data:/app/data" ia-nmap-agent
