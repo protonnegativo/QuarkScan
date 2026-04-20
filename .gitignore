@@ -1,0 +1,17 @@
+# Variáveis de ambiente — NUNCA commitar
+.env
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# IDEs
+.idea/
+.vscode/
+*.swp

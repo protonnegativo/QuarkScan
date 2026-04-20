@@ -1,0 +1,6 @@
+langchain
+langchain-google-genai
+langgraph
+requests
+python-dotenv
+urllib3
