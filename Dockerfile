@@ -11,7 +11,6 @@ RUN apt-get update && apt-get install -y \
     whatweb \
     gobuster \
     dirb \
-    dirbuster \
     python3 \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
@@ -23,6 +22,6 @@ WORKDIR /app
 COPY . .
 
 # Instala as dependências Python
-RUN pip3 install --no-cache-dir -r requirements.txt --break-system-packages
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 CMD ["python3", "agente.py"]

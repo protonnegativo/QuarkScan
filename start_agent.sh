@@ -12,8 +12,10 @@ if ! systemctl is-active --quiet docker; then
 fi
 
 echo -e "${BLUE}[*] Atualizando a 'fotografia' do agente (Build)...${NC}"
-# O --quiet serve para não encher sua tela de logs de instalação
-docker build -q -t ia-nmap-agent . > /dev/null 2>&1
+if ! docker build -t ia-nmap-agent . ; then
+    echo -e "\033[0;31m[!] Build falhou. Corrija os erros acima antes de continuar.\033[0m"
+    exit 1
+fi
 
 echo -e "${GREEN}[+] Iniciando Agente de IA Isolado...${NC}"
 echo -e "${GREEN}------------------------------------------${NC}"
