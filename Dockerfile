@@ -1,5 +1,5 @@
 # Usa uma imagem oficial e leve do Ubuntu
-FROM ubuntu:latest
+FROM ubuntu:22.04
 
 # Evita perguntas interativas durante a instalação
 ENV DEBIAN_FRONTEND=noninteractive
@@ -7,6 +7,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Atualiza e instala ferramentas DO SISTEMA (Ubuntu)
 RUN apt-get update && apt-get install -y \
     nmap \
+    nikto \
+    whatweb \
+    gobuster \
+    dirb \
+    dirbuster \
     python3 \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
