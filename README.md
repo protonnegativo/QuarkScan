@@ -1,7 +1,9 @@
-# Offensive AI — Agente OWASP
+# QuarkScan
 
 Agente de IA para auditoria de segurança ofensiva baseado em LangGraph com arquitetura multi-agent.
 Um supervisor inteligente roteia cada requisição para o especialista correto e consolida os resultados.
+
+
 
 ## Arquitetura
 
@@ -45,8 +47,8 @@ Você
 ## Instalação
 
 ```bash
-git clone https://github.com/protonnegativo/offensive-ai.git
-cd offensive-ai
+git clone https://github.com/protonnegativo/QuarkScan.git
+cd QuarkScan
 
 cp .env.example .env
 # Edite .env e adicione sua GEMINI_API_KEY

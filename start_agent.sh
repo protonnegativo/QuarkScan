@@ -12,13 +12,13 @@ if ! systemctl is-active --quiet docker; then
 fi
 
 echo -e "${BLUE}[*] Atualizando a 'fotografia' do agente (Build)...${NC}"
-if ! docker build -t ia-nmap-agent . ; then
+if ! docker build -t quarkscan . ; then
     echo -e "\033[0;31m[!] Build falhou. Corrija os erros acima antes de continuar.\033[0m"
     exit 1
 fi
 
-echo -e "${GREEN}[+] Iniciando Agente de IA Isolado...${NC}"
+echo -e "${GREEN}[+] Iniciando QuarkScan...${NC}"
 echo -e "${GREEN}------------------------------------------${NC}"
 
 mkdir -p data
-docker run -it --rm --env-file .env -v "$(pwd)/data:/app/data" ia-nmap-agent
+docker run -it --rm --env-file .env -v "$(pwd)/data:/app/data" quarkscan

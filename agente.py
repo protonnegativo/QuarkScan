@@ -5,7 +5,7 @@ from terminal import C, formatar_para_terminal
 load_dotenv()
 
 print(f"\n{C.CYAN}{C.BOLD}{chr(9552) * 60}{C.RESET}")
-print(f"{C.CYAN}{C.BOLD}      AGENTE OWASP {chr(8212)} OFFENSIVE AI READY{C.RESET}")
+print(f"{C.CYAN}{C.BOLD}      QuarkScan {chr(8212)} OFFENSIVE AI READY{C.RESET}")
 print(f"{C.CYAN}{C.BOLD}{chr(9552) * 60}{C.RESET}\n")
 
 while True:
