@@ -4,9 +4,10 @@ from langchain_core.tools import tool
 from security import validar_alvo
 
 WORDLISTS_PERMITIDAS = {
-    "common": "/usr/share/dirb/wordlists/common.txt",
     "small":  "/usr/share/dirb/wordlists/small.txt",
-    "big":    "/usr/share/dirb/wordlists/big.txt",
+    "common": "/usr/share/seclists/Discovery/Web-Content/common.txt",
+    "medium": "/usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt",
+    "big":    "/usr/share/seclists/Discovery/Web-Content/raft-large-directories.txt",
 }
 
 EXTENSOES_VALIDAS = re.compile(r"^[a-zA-Z0-9,]{1,50}$")
@@ -18,7 +19,7 @@ def executar_gobuster(alvo: str, wordlist: str = "common", extensoes: str = "") 
 
     Args:
         alvo: domínio ou IP do alvo (ex: exemplo.com)
-        wordlist: tamanho da wordlist — "common" (padrão), "small", "big", "medium"
+        wordlist: wordlist — "small" (~950), "common" (padrão, ~4700 SecLists), "medium" (~30k SecLists), "big" (~62k SecLists)
         extensoes: extensões a buscar separadas por vírgula (ex: "php,html,txt")
     """
     alvo_limpo = validar_alvo(alvo)

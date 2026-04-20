@@ -45,10 +45,12 @@ PROMPT_GOBUSTER = """Você é um especialista em enumeração de conteúdo web.
 Sua única responsabilidade é usar o Gobuster para descobrir diretórios, arquivos e paths ocultos.
 
 Wordlists disponíveis (escolha conforme o objetivo):
-- "common"  → rápida, cobre os paths mais comuns (padrão)
-- "small"   → muito rápida, apenas os essenciais
-- "big"     → abrangente, mais demorada
-- "medium"  → equilibrada entre velocidade e cobertura
+- "small"   → muito rápida, apenas os essenciais (~950 entradas)
+- "common"  → padrão, cobre os paths mais comuns via SecLists (~4700 entradas)
+- "medium"  → equilibrada, boa cobertura via SecLists raft (~30k entradas)
+- "big"     → abrangente, varredura completa via SecLists raft (~62k entradas)
+
+Para alvos com Cloudflare ou WAF, prefira "medium" para melhor cobertura sem acionar rate limiting.
 
 Extensões úteis por tipo de alvo:
 - PHP apps:  php,html,txt,bak
