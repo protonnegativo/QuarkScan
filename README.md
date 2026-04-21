@@ -17,21 +17,26 @@ QuarkScan é uma plataforma multi-agente onde um **Supervisor LLM** interpreta s
 
 ```
 Você: "scan completo em exemplo.com"
-       │
-       ▼
-┌─────────────────────┐
-│   Supervisor LLM    │  ← Gemini 2.5 Flash · LangGraph ReAct · MemorySaver
-└──────────┬──────────┘
-           │ roteia para agentes especializados
-     ┌─────┼──────────────────────────────────────┐
-     ▼     ▼     ▼        ▼       ▼      ▼    ▼   ▼
-  [nmap] [headers] [gobuster] [nikto] [nuclei] [whatweb] [subfinder] [histórico]
-     │       │        │         │        │        │         │
-     └───────┴────────┴─────────┴────────┴────────┴─────────┘
-                                │
-                        ┌───────▼───────┐
-                        │  SQLite (DB)  │  ← histórico · comparação · diff entre scans
-                        └───────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────┐
+│             Supervisor LLM              │
+│  Gemini 2.5 Flash · LangGraph · Memory  │
+└─────────────────────────────────────────┘
+              │
+              ├──▶ agente_nmap       →  Nmap
+              ├──▶ agente_headers    →  requests
+              ├──▶ agente_gobuster   →  Gobuster + SecLists
+              ├──▶ agente_nikto      →  Nikto
+              ├──▶ agente_nuclei     →  Nuclei (templates)
+              ├──▶ agente_whatweb    →  WhatWeb
+              ├──▶ agente_subfinder  →  Subfinder
+              └──▶ agente_historico  →  SQLite
+                          │
+                          ▼
+                  ┌───────────────┐
+                  │  SQLite (DB)  │  ← histórico · diff entre scans
+                  └───────────────┘
 ```
 
 ---
