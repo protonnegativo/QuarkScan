@@ -23,29 +23,32 @@ Você: "scan completo em exemplo.com"
 │   Supervisor LLM    │  ← Gemini 2.5 Flash · LangGraph ReAct · MemorySaver
 └──────────┬──────────┘
            │ roteia para agentes especializados
-     ┌─────┼──────────────────────────────────┐
-     ▼     ▼     ▼        ▼       ▼      ▼    ▼
-  [nmap] [headers] [gobuster] [nikto] [whatweb] [subfinder] [histórico]
-     │       │        │         │        │         │
-     └───────┴────────┴─────────┴────────┴─────────┘
-                          │
-                  ┌───────▼───────┐
-                  │  SQLite (DB)  │  ← histórico · comparação · diff entre scans
-                  └───────────────┘
+     ┌─────┼──────────────────────────────────────┐
+     ▼     ▼     ▼        ▼       ▼      ▼    ▼   ▼
+  [nmap] [headers] [gobuster] [nikto] [nuclei] [whatweb] [subfinder] [histórico]
+     │       │        │         │        │        │         │
+     └───────┴────────┴─────────┴────────┴────────┴─────────┘
+                                │
+                        ┌───────▼───────┐
+                        │  SQLite (DB)  │  ← histórico · comparação · diff entre scans
+                        └───────────────┘
 ```
 
 ---
 
 ## Funcionalidades
 
-- **7 agentes especializados** — cada um com LLM próprio e domínio específico
+- **8 agentes especializados** — cada um com LLM próprio e domínio específico
 - **Supervisor inteligente** — roteia, evita loops, não repete scans já realizados
+- **Cache de resultados** — consulta o banco antes de cada scan; evita re-execuções desnecessárias entre sessões
+- **Proteção anti-loop** — limite de recursão por agente; erros de quota/API tratados sem crash
 - **Evasão de WAF/CDN** — perfis de navegador reais (Chrome, Firefox, Safari, Googlebot), delays configuráveis, técnicas de evasão IDS
 - **Histórico persistente** — compara dois scans do mesmo alvo e destaca o que mudou
 - **Enumeração de subdomínios** — filtra automaticamente os prioritários (api, admin, jenkins, staging...)
+- **Parâmetros completos** — todos os tools expõem os flags relevantes das ferramentas oficiais
 - **Segurança de execução** — allowlist de flags Nmap, validação de alvos, scripts NSE restritos
-- **Isolamento por sessão** — deduplicação de chamadas por hash de argumentos
-- **Container Docker** — ambiente completo e isolado com SecLists incluída
+- **Deduplicação por sessão** — evita chamadas duplicadas via hash SHA-256 dos argumentos
+- **Container Docker** — ambiente completo e isolado com SecLists e templates Nuclei incluídos
 
 ---
 
@@ -57,6 +60,7 @@ Você: "scan completo em exemplo.com"
 | `agente_headers` | requests | Headers HTTP, cookies, conformidade OWASP |
 | `agente_gobuster` | Gobuster + SecLists | Diretórios, arquivos e paths ocultos |
 | `agente_nikto` | Nikto | CVEs, misconfigurações de servidor, versões vulneráveis |
+| `agente_nuclei` | Nuclei | CVEs indexados, exposições, defaults de login, templates ProjectDiscovery |
 | `agente_whatweb` | WhatWeb | CMS, frameworks, bibliotecas, stack completo |
 | `agente_subfinder` | Subfinder | Subdomínios via DNS passivo e certificate transparency |
 | `agente_historico` | SQLite | Histórico de scans, comparação entre execuções |
@@ -103,17 +107,27 @@ analisa os headers de exemplo.com
 enumera subdomínios de exemplo.com
 faz gobuster com wordlist medium em exemplo.com
 vulnerabilidades nas portas abertas de exemplo.com
+nuclei em exemplo.com focando em CVEs críticos
 mostra o histórico de scans de exemplo.com
 compara os dois últimos nmap de exemplo.com
 ```
 
-### Evasão de WAF
+### Cache de resultados
 
-O agente tenta automaticamente técnicas de evasão quando detecta CDN/WAF (Akamai, Cloudflare). Você também pode ser explícito:
+O agente consulta o banco antes de executar cada scan. Se houver resultado recente, ele é retornado imediatamente. Para forçar um novo scan, basta pedir explicitamente:
 
 ```
-nikto em exemplo.com com perfil chrome e evasão
-gobuster em exemplo.com com delay de 1s e perfil firefox
+refaz o nmap em exemplo.com com resultado atualizado
+```
+
+### Evasão de WAF
+
+O agente tenta automaticamente técnicas de evasão quando detecta CDN/WAF. Você também pode ser explícito:
+
+```
+nikto em exemplo.com com perfil chrome e evasão ids
+gobuster em exemplo.com http com delay de 1s e perfil firefox
+nuclei em exemplo.com usando proxy http://127.0.0.1:8080
 ```
 
 ---
@@ -124,17 +138,19 @@ gobuster em exemplo.com com delay de 1s e perfil firefox
 QuarkScan/
 ├── agente.py          # Entry point — loop de conversa
 ├── prompts.py         # System prompts de todos os agentes
-├── security.py        # Allowlist de flags e validação de alvos
-├── storage.py         # Persistência SQLite
-├── session.py         # Deduplicação de chamadas por sessão
-├── profiles.py        # Perfis de navegador para evasão
+├── security.py        # Allowlist de flags Nmap e validação de alvos
+├── storage.py         # Persistência SQLite + cache de resultados
+├── session.py         # Deduplicação de chamadas por sessão (SHA-256)
+├── profiles.py        # Perfis de navegador para evasão WAF
 ├── terminal.py        # Formatação colorida do output
 ├── agents/
+│   ├── base.py        # invocar() com recursion_limit e tratamento de erros
 │   ├── supervisor.py  # Orquestrador LangGraph com MemorySaver
 │   ├── nmap.py
 │   ├── headers.py
 │   ├── gobuster.py
 │   ├── nikto.py
+│   ├── nuclei.py
 │   ├── whatweb.py
 │   ├── subfinder.py
 │   └── historico.py
@@ -143,6 +159,7 @@ QuarkScan/
 │   ├── headers.py
 │   ├── gobuster.py
 │   ├── nikto.py
+│   ├── nuclei.py
 │   ├── whatweb.py
 │   ├── subfinder.py
 │   └── historico.py
@@ -157,10 +174,14 @@ QuarkScan/
 
 | Controle | Detalhe |
 |---|---|
-| Flags Nmap | Allowlist explícita — flags não listadas são ignoradas |
-| Scripts NSE | Restritos a: `vuln`, `default`, `safe`, `discovery`, `http-headers`, `http-title`, `ssl-enum-ciphers`, `banner` |
+| Flags Nmap | Allowlist explícita — inclui `-sS/sT/sU/sV/sN/sF/sX`, `--top-ports`, `--min-rate`, `-PE/-PS/-PA` e outros |
+| Scripts NSE | Restritos a: `vuln`, `default`, `safe`, `discovery`, `http-headers`, `http-title`, `ssl-enum-ciphers`, `ssl-cert`, `banner`, `http-methods`, `ftp-anon`, `ssh-hostkey`, `smb-vuln-ms17-010` e outros |
 | Alvos | Validados por regex — apenas domínios e IPs válidos aceitos |
 | Extensões Gobuster | Validadas por regex antes do uso |
+| Status codes / comprimento | Whitelist e blacklist de respostas configuráveis |
+| Cache de resultados | TTL por ferramenta (12h–72h) — evita re-scans automáticos |
+| Deduplicação | Hash SHA-256 dos argumentos por sessão |
+| Anti-loop | Limite de 10 iterações por agente especialista |
 | Isolamento | Execução dentro de container Docker |
 
 ---

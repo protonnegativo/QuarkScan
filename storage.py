@@ -6,13 +6,13 @@ DB_PATH = os.environ.get("DB_PATH", "data/resultados.db")
 
 
 def _conn():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def _init():
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     with _conn() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS resultados (
@@ -68,6 +68,18 @@ def alvos() -> list[dict]:
             ORDER BY ultimo DESC
         """).fetchall()
         return [dict(r) for r in rows]
+
+
+def resultado_recente(alvo: str, ferramenta: str, horas: int = 24) -> dict | None:
+    """Retorna resultado mais recente dentro do TTL, ou None se não houver."""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM resultados WHERE alvo=? AND ferramenta=? "
+            "AND datetime(timestamp) >= datetime('now', 'localtime', ?) "
+            "ORDER BY timestamp DESC LIMIT 1",
+            (alvo.lower(), ferramenta, f"-{horas} hours"),
+        ).fetchone()
+        return dict(row) if row else None
 
 
 def ultimos_dois(alvo: str, ferramenta: str) -> tuple:

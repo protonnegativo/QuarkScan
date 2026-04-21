@@ -1,6 +1,7 @@
-langchain
-langchain-google-genai
-langgraph
-requests
-python-dotenv
-urllib3
+langchain==1.2.15
+langchain-google-genai==4.2.2
+langchain-core==1.3.0
+langgraph==1.1.8
+requests==2.33.1
+python-dotenv==1.2.2
+urllib3==2.6.3

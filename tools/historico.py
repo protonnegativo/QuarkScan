@@ -1,6 +1,44 @@
+import re
 from langchain_core.tools import tool
 from security import validar_alvo
 import storage
+
+
+def _extrair_itens(ferramenta: str, texto: str) -> set[str]:
+    linhas = [l.strip() for l in texto.splitlines() if l.strip()]
+
+    if ferramenta == "nmap":
+        return {l for l in linhas if re.match(r"^\d+/(tcp|udp)\s+\w+", l)}
+
+    if ferramenta == "subfinder":
+        return {l for l in linhas if not l.startswith("##") and not l.startswith("...")}
+
+    if ferramenta == "gobuster":
+        return {l for l in linhas if l.startswith("/")}
+
+    if ferramenta == "headers":
+        return {
+            l for l in linhas
+            if (":" in l and not l.startswith("ALVO"))
+            or l.startswith("OWASP")
+            or l.startswith("AVISO")
+        }
+
+    if ferramenta == "nuclei":
+        return {
+            re.sub(r"^\[[\d\-: ]+\]\s*", "", l)
+            for l in linhas
+            if l.startswith("[")
+        }
+
+    if ferramenta in ("nikto", "whatweb"):
+        return {
+            l for l in linhas
+            if not re.match(r"^[-\s]*Nikto", l)
+            and not re.search(r"\d{4}-\d{2}-\d{2}", l)
+        }
+
+    return set(linhas)
 
 
 @tool
@@ -24,7 +62,7 @@ def consultar_historico(alvo: str, ferramenta: str = "") -> str:
 
     Args:
         alvo: domínio ou IP do alvo
-        ferramenta: filtrar por ferramenta (opcional) — nmap, headers, gobuster, nikto, whatweb, subfinder
+        ferramenta: filtrar por ferramenta (opcional) — nmap, headers, gobuster, nikto, nuclei, whatweb, subfinder
     """
     alvo_limpo = validar_alvo(alvo)
     if not alvo_limpo:
@@ -39,8 +77,8 @@ def consultar_historico(alvo: str, ferramenta: str = "") -> str:
         linhas.append(f"[{r['timestamp']}] {r['ferramenta']}  (ID: {r['id']})")
         if r["parametros"]:
             linhas.append(f"  Parâmetros: {r['parametros']}")
-        preview = r["resultado"][:600]
-        if len(r["resultado"]) > 600:
+        preview = r["resultado"][:1000]
+        if len(r["resultado"]) > 1000:
             preview += "..."
         linhas.append(f"  {preview}\n")
     return "\n".join(linhas)
@@ -52,7 +90,7 @@ def comparar_scans(alvo: str, ferramenta: str) -> str:
 
     Args:
         alvo: domínio ou IP do alvo
-        ferramenta: nmap, headers, gobuster, nikto, whatweb ou subfinder
+        ferramenta: nmap, headers, gobuster, nikto, nuclei, whatweb ou subfinder
     """
     alvo_limpo = validar_alvo(alvo)
     if not alvo_limpo:
@@ -64,8 +102,8 @@ def comparar_scans(alvo: str, ferramenta: str) -> str:
     if not anterior:
         return f"Apenas um scan de {ferramenta} disponível. Execute novamente para comparar."
 
-    novo = set(l for l in atual["resultado"].splitlines() if l.strip())
-    antigo = set(l for l in anterior["resultado"].splitlines() if l.strip())
+    novo = _extrair_itens(ferramenta, atual["resultado"])
+    antigo = _extrair_itens(ferramenta, anterior["resultado"])
 
     adicionados = sorted(novo - antigo)
     removidos = sorted(antigo - novo)

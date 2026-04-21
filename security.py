@@ -1,17 +1,46 @@
 import re
 
 FLAGS_PERMITIDAS = {
-    "-sT", "-sV", "-sU", "-sS", "-sn", "-sC",
-    "-p", "-p-", "--open", "-A", "-O", "-T",
+    # Tipos de scan
+    "-sT", "-sS", "-sU", "-sV", "-sN", "-sF", "-sX", "-sn", "-sC",
+    # Portas
+    "-p", "-p-", "--top-ports", "--exclude-ports",
+    # Descoberta de host
+    "-Pn", "-PE", "-PS", "-PA", "-PU",
+    # Comportamento
+    "--open", "-v", "-vv", "-n",
+    # Timing
+    "-T", "--min-rate", "--max-rate",
+    # Detecção
+    "-A", "-O", "--version-intensity", "--osscan-guess",
+    # Scripts NSE
     "--script", "--script-args",
-    "-Pn", "-n", "-v", "-vv",
 }
 
-FLAGS_COM_VALOR = {"--script", "--script-args", "-p", "-T"}
+FLAGS_COM_VALOR = {
+    "--script", "--script-args",
+    "-p", "--exclude-ports",
+    "-T",
+    "--top-ports", "--min-rate", "--max-rate", "--version-intensity",
+}
 
 SCRIPTS_PERMITIDOS = {
     "vuln", "default", "safe", "discovery",
     "http-headers", "http-title", "ssl-enum-ciphers", "banner",
+    "http-methods", "http-auth-finder", "http-robots.txt",
+    "ftp-anon", "smtp-commands", "ssh-hostkey", "ssl-cert",
+    "smb-security-mode", "smb-vuln-ms17-010",
+}
+
+_VALIDADORES = {
+    "-p":                  r"^[\d,\-]+$",
+    "--exclude-ports":     r"^[\d,\-]+$",
+    "-T":                  r"^[0-5]$",
+    "--top-ports":         r"^\d+$",
+    "--min-rate":          r"^\d+$",
+    "--max-rate":          r"^\d+$",
+    "--version-intensity": r"^[0-9]$",
+    "--script-args":       None,
 }
 
 
@@ -26,16 +55,14 @@ def validar_args(argumentos: str) -> list:
                 scripts = [s.strip() for s in token.split(",") if s.strip() in SCRIPTS_PERMITIDOS]
                 if scripts:
                     resultado.append(",".join(scripts))
-                else:
-                    if resultado and resultado[-1] == "--script":
-                        resultado.pop()
-            elif aguardando_valor_de in {"-p", "-T"}:
-                if re.match(r"^[\d,\-]+$", token):
-                    resultado.append(token)
-                elif resultado and resultado[-1] in {"-p", "-T"}:
+                elif resultado and resultado[-1] == "--script":
                     resultado.pop()
             else:
-                resultado.append(token)
+                pattern = _VALIDADORES.get(aguardando_valor_de)
+                if pattern is None or re.match(pattern, token):
+                    resultado.append(token)
+                elif resultado and resultado[-1] == aguardando_valor_de:
+                    resultado.pop()
             aguardando_valor_de = None
         else:
             if any(token == f or token.startswith(f) for f in FLAGS_PERMITIDAS):

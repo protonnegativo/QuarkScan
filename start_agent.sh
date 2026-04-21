@@ -5,6 +5,11 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # Sem cor
 
+if [ ! -f .env ]; then
+    echo -e "\033[0;31m[!] Arquivo .env não encontrado. Copie .env.example e preencha a GEMINI_API_KEY.\033[0m"
+    exit 1
+fi
+
 echo -e "${BLUE}[*] Verificando serviço do Docker...${NC}"
 if ! systemctl is-active --quiet docker; then
     echo -e "${BLUE}[!] Docker está desligado. Ligando...${NC}"

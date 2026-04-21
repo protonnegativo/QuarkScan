@@ -4,35 +4,57 @@ from security import FLAGS_PERMITIDAS, validar_args, validar_alvo
 from session import ja_executado, registrar
 import storage
 
+_MAX_CHARS = 5000
+
+
+def _truncar(texto: str) -> str:
+    if len(texto) <= _MAX_CHARS:
+        return texto
+    return texto[:_MAX_CHARS] + f"\n... [saída truncada — {len(texto)} chars total]"
+
 
 @tool
-def executar_nmap(alvo: str, argumentos: str) -> str:
-    """Executa varredura Nmap no alvo com os argumentos fornecidos.
+def executar_nmap(alvo: str, argumentos: str, forcar_novo: bool = False) -> str:
+    """Executa varredura Nmap no alvo.
 
-    Argumentos devem ser flags nmap separadas por espaço.
-    Escolha conforme o objetivo da auditoria:
-    - Reconhecimento básico: use -sT com -p e portas específicas
-    - Varredura completa de portas: use -sT -p- com --open
-    - Detecção de versão: use -sV com -p e portas relevantes
-    - Scan de vulnerabilidades: use -sV --script vuln com -p e as portas abertas
-    - Fingerprint completo: use -A com -T4
+    Args:
+        alvo: domínio ou IP (ex: exemplo.com, 192.168.1.1)
+        argumentos: flags separadas por espaço. Exemplos por objetivo:
+            Reconhecimento rápido:      -sT -p 22,80,443
+            Todas as portas:            -sT -p- --open
+            Top 1000 portas (stealth):  -sS -Pn --top-ports 1000
+            Versões detalhadas:         -sV -p 80,443 --version-intensity 5
+            Vulnerabilidades:           -sV --script vuln -p 80,443,8080
+            Fingerprint completo:       -A -T4
+            Análise SSL:                --script ssl-enum-ciphers,ssl-cert -p 443
+            Scan furtivo:               -sN | -sF | -sX com -Pn
+            Controle de velocidade:     --min-rate 500 --max-rate 2000
+            Excluir portas:             --exclude-ports 22,3306
+            Host discovery:             -PE | -PS443 | -PA80 | -PU53
+        forcar_novo: ignorar cache e re-executar (padrão False)
 
-    Scripts disponíveis para --script: vuln, default, safe, discovery,
-    http-headers, http-title, ssl-enum-ciphers, banner
+    Scripts NSE disponíveis: vuln, default, safe, discovery, http-headers,
+    http-title, ssl-enum-ciphers, banner, http-methods, http-auth-finder,
+    http-robots.txt, ftp-anon, smtp-commands, ssh-hostkey, ssl-cert,
+    smb-security-mode, smb-vuln-ms17-010
     """
     alvo_limpo = validar_alvo(alvo)
     if not alvo_limpo:
-        return "Erro: alvo inválido. Use domínio ou IP (ex: exemplo.com, 192.168.1.1)."
+        return "Erro: alvo inválido. Use domínio ou IP."
 
     args_validados = validar_args(argumentos)
     if not args_validados:
         return f"Erro: nenhum argumento válido. Flags permitidas: {', '.join(sorted(FLAGS_PERMITIDAS))}"
 
-    if ja_executado(alvo_limpo, "nmap", argumentos):
-        return "Scan nmap já realizado com esses argumentos nesta sessão. Use o resultado anterior disponível no contexto ou consulte agente_historico."
+    if not forcar_novo:
+        if ja_executado(alvo_limpo, "nmap", argumentos):
+            return "Scan nmap já realizado com esses argumentos nesta sessão."
+        cache = storage.resultado_recente(alvo_limpo, "nmap", horas=24)
+        if cache:
+            registrar(alvo_limpo, "nmap", argumentos)
+            return f"[CACHE {cache['timestamp']}] Use forcar_novo=True para re-executar.\n\n{_truncar(cache['resultado'])}"
 
     registrar(alvo_limpo, "nmap", argumentos)
-
     comando = ["nmap"] + args_validados + [alvo_limpo]
     print(f"[nmap] Executando: {' '.join(comando)}")
 
@@ -40,8 +62,8 @@ def executar_nmap(alvo: str, argumentos: str) -> str:
         resultado = subprocess.run(comando, capture_output=True, text=True, timeout=300)
         saida = resultado.stdout or resultado.stderr
         storage.salvar(alvo_limpo, "nmap", saida, {"argumentos": argumentos})
-        return saida
+        return _truncar(saida)
     except subprocess.TimeoutExpired:
-        return "Erro: timeout atingido (300s). Tente um scan mais focado em menos portas."
+        return "Erro: timeout (300s). Use --top-ports ou menos portas."
     except Exception as e:
         return str(e)

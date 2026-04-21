@@ -4,7 +4,7 @@ _executados: set[str] = set()
 
 
 def _chave(*args) -> str:
-    return hashlib.md5("|".join(str(a).lower() for a in args).encode()).hexdigest()
+    return hashlib.sha256("|".join(str(a).lower() for a in args).encode()).hexdigest()
 
 
 def ja_executado(*args) -> bool:
