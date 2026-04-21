@@ -1,8 +1,11 @@
+import uuid
 from dotenv import load_dotenv
-from agents.supervisor import supervisor, config
+from agents.supervisor import supervisor
 from terminal import C, formatar_para_terminal
 
 load_dotenv()
+
+config = {"configurable": {"thread_id": str(uuid.uuid4())}}
 
 print(f"\n{C.CYAN}{C.BOLD}{chr(9552) * 60}{C.RESET}")
 print(f"{C.CYAN}{C.BOLD}      QuarkScan {chr(8212)} OFFENSIVE AI READY{C.RESET}")

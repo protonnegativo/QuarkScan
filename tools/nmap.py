@@ -1,6 +1,7 @@
 import subprocess
 from langchain_core.tools import tool
 from security import FLAGS_PERMITIDAS, validar_args, validar_alvo
+from session import ja_executado, registrar
 import storage
 
 
@@ -26,6 +27,11 @@ def executar_nmap(alvo: str, argumentos: str) -> str:
     args_validados = validar_args(argumentos)
     if not args_validados:
         return f"Erro: nenhum argumento válido. Flags permitidas: {', '.join(sorted(FLAGS_PERMITIDAS))}"
+
+    if ja_executado(alvo_limpo, "nmap", argumentos):
+        return "Scan nmap já realizado com esses argumentos nesta sessão. Use o resultado anterior disponível no contexto ou consulte agente_historico."
+
+    registrar(alvo_limpo, "nmap", argumentos)
 
     comando = ["nmap"] + args_validados + [alvo_limpo]
     print(f"[nmap] Executando: {' '.join(comando)}")

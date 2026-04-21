@@ -1,5 +1,8 @@
-# Variáveis de ambiente — NUNCA commitar
+# Credenciais
 .env
+
+# Banco de dados local
+data/
 
 # Cache Python
 __pycache__/
@@ -15,6 +18,4 @@ env/
 .idea/
 .vscode/
 *.swp
-
-# Banco de dados local de histórico
-data/
+*.swo

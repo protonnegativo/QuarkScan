@@ -1,16 +1,12 @@
-# Usa uma imagem oficial e leve do Ubuntu
 FROM ubuntu:22.04
 
-# Evita perguntas interativas durante a instalação
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Atualiza e instala ferramentas DO SISTEMA (Ubuntu)
 RUN apt-get update && apt-get install -y \
     nmap \
     nikto \
     whatweb \
     gobuster \
-    dirb \
     curl \
     unzip \
     python3 \
@@ -33,13 +29,10 @@ RUN mkdir -p /usr/share/seclists/Discovery/Web-Content && \
     curl -sL "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/raft-large-directories.txt" \
          -o /usr/share/seclists/Discovery/Web-Content/raft-large-directories.txt
 
-# Define o diretório de trabalho
 WORKDIR /app
 
-# Copia os arquivos do seu projeto para dentro da caixa
 COPY . .
 
-# Instala as dependências Python
 RUN pip3 install --no-cache-dir -r requirements.txt
 
 CMD ["python3", "agente.py"]

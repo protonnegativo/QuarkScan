@@ -19,5 +19,3 @@ supervisor = create_react_agent(
     checkpointer=_memoria,
     prompt=PROMPT_SUPERVISOR,
 )
-
-config = {"configurable": {"thread_id": "auditoria-01"}}
