@@ -21,7 +21,7 @@ Você: "scan completo em exemplo.com"
               ▼
 ┌─────────────────────────────────────────┐
 │             Supervisor LLM              │
-│  Gemini 2.5 Flash · LangGraph · Memory  │
+│    Gemini API · LangGraph · Memory      │
 └─────────────────────────────────────────┘
               │
               ├──▶ agente_nmap       →  Nmap
@@ -45,6 +45,8 @@ Você: "scan completo em exemplo.com"
 
 - **8 agentes especializados** — cada um com LLM próprio e domínio específico
 - **Supervisor inteligente** — roteia, evita loops, não repete scans já realizados
+- **Pipeline autônomo** — modo sequencial `recon passivo → ativo → enumeração → análise` com confirmação antes de fases destrutivas
+- **Modelo configurável** — troca o modelo de qualquer agente via env var sem tocar no código; cada agente pode usar um modelo diferente
 - **Cache de resultados** — consulta o banco antes de cada scan; evita re-execuções desnecessárias entre sessões
 - **Proteção anti-loop** — limite de recursão por agente; erros de quota/API tratados sem crash
 - **Evasão de WAF/CDN** — perfis de navegador reais (Chrome, Firefox, Safari, Googlebot), delays configuráveis, técnicas de evasão IDS
@@ -60,7 +62,7 @@ Você: "scan completo em exemplo.com"
 ## Agentes
 
 | Agente | Ferramenta | Função |
-|---|---|
+|---|---|---|
 | `agente_nmap` | Nmap | Portas, serviços, fingerprint de OS, scripts NSE |
 | `agente_headers` | requests | Headers HTTP, cookies, conformidade OWASP |
 | `agente_gobuster` | Gobuster + SecLists | Diretórios, arquivos e paths ocultos |
@@ -75,7 +77,7 @@ Você: "scan completo em exemplo.com"
 ## Pré-requisitos
 
 - [Docker](https://docs.docker.com/get-docker/) — todas as ferramentas rodam no container
-- Chave de API do [Google Gemini](https://aistudio.google.com/apikey) — o modelo é gratuito no tier de desenvolvimento
+- Chave de API do [Google Gemini](https://aistudio.google.com/apikey) — `gemini-2.5-flash` é gratuito no tier de desenvolvimento
 
 ---
 
@@ -91,6 +93,13 @@ Edite `.env` e adicione sua chave:
 
 ```env
 GEMINI_API_KEY=sua_chave_aqui
+
+# Modelo padrão para todos os agentes (opcional — default: gemini-2.5-flash)
+# GEMINI_MODEL=gemini-2.5-pro
+
+# Override por agente — útil para usar Pro no supervisor e Flash nos demais
+# GEMINI_MODEL_SUPERVISOR=gemini-2.5-pro
+# GEMINI_MODEL_NMAP=gemini-2.5-flash
 ```
 
 ---
@@ -125,6 +134,26 @@ O agente consulta o banco antes de executar cada scan. Se houver resultado recen
 refaz o nmap em exemplo.com com resultado atualizado
 ```
 
+### Pipeline autônomo
+
+Execute todas as fases de reconhecimento em sequência com um único comando. O pipeline pede confirmação antes de operações agressivas e gera um relatório consolidado ao final.
+
+```
+pipeline em exemplo.com
+modo autônomo em exemplo.com
+pentest completo em exemplo.com
+```
+
+Fases executadas em ordem:
+
+| Fase | Agentes | Confirmação |
+|---|---|---|
+| Reconhecimento Passivo | subfinder | não |
+| Reconhecimento Ativo | nmap, whatweb, headers | não |
+| Enumeração | gobuster, nikto | **sim** |
+| Análise de Vulnerabilidades | nuclei | **sim** |
+| Relatório consolidado | supervisor (sumário via LLM) | — |
+
 ### Evasão de WAF
 
 O agente tenta automaticamente técnicas de evasão quando detecta CDN/WAF. Você também pode ser explícito:
@@ -142,6 +171,8 @@ nuclei em exemplo.com usando proxy http://127.0.0.1:8080
 ```
 QuarkScan/
 ├── agente.py          # Entry point — loop de conversa
+├── pipeline.py        # Pipeline autônomo de fases com confirmação
+├── llm.py             # Resolução de modelo via env var (GEMINI_MODEL_*)
 ├── prompts.py         # System prompts de todos os agentes
 ├── security.py        # Allowlist de flags Nmap e validação de alvos
 ├── storage.py         # Persistência SQLite + cache de resultados
@@ -267,7 +298,7 @@ As seções seguem as fases de um engajamento real. Itens dentro de cada fase es
 
 | Item | Descrição |
 |---|---|
-| **Pipeline de fases** | Modo autônomo sequencial: recon passivo → recon ativo → enumeração → análise → exploração → report, com confirmação antes de cada fase destrutiva |
+| ~~**Pipeline de fases**~~ | ✓ Implementado — `pipeline em <alvo>` |
 | **Modo agressivo / lightweight** | Flag no chat para controlar intensidade (threads, timeout, técnicas) sem editar código |
 | **Memória de alvo persistente** | Knowledge graph acumulativo entre engajamentos: IP → ASN, subdomínios vistos, serviços historicamente vulneráveis. Diferente do histórico atual, que armazena outputs brutos |
 | **Replay de sessão** | Recarregar sessão anterior pelo ID e continuar de onde parou, sem repetir o que já foi scaneado |
