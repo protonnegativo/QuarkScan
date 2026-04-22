@@ -9,6 +9,7 @@ if not os.environ.get("GEMINI_API_KEY"):
     exit(1)
 
 from agents.supervisor import supervisor
+from pipeline import detectar_alvo_pipeline, executar_pipeline
 from terminal import C, formatar_para_terminal
 
 config = {"configurable": {"thread_id": str(uuid.uuid4())}}
@@ -29,6 +30,11 @@ while True:
 
     if pergunta.lower() in ["sair", "exit", "quit"]:
         break
+
+    alvo_pipeline = detectar_alvo_pipeline(pergunta)
+    if alvo_pipeline:
+        executar_pipeline(alvo_pipeline, supervisor.invoke, config)
+        continue
 
     print(f"\n{C.GRAY}[Supervisor] Roteando...{C.RESET}")
 
