@@ -191,6 +191,45 @@ QuarkScan/
 
 ---
 
+## To Do — Roadmap para Pentest Autônomo
+
+### Módulos de Reconhecimento (inspirados no Sophia)
+
+- [ ] **agente_osint** — Certificate Transparency (crt.sh), Shodan, VirusTotal, WHOIS, ASN lookup, Google Dorks automatizados. Hoje o subfinder cobre só DNS passivo; OSINT amplia a superfície de ataque antes de qualquer scan ativo
+- [ ] **agente_ssl** — Análise de certificados TLS, ciphers fracos, BEAST/POODLE/Heartbleed, expiração. Wraps: `sslscan`, `testssl.sh`
+- [ ] **agente_cloud** — Detecção de buckets S3/Azure Blob/GCP expostos, endpoints de metadata (169.254.169.254), headers de provider. Wraps: `cloudenum`, `s3scanner`
+- [ ] **Múltiplos enumeradores de subdomínio** — Adicionar `amass`, `assetfinder` e `findomain` ao `agente_subfinder`, com deduplicação e merge automático dos resultados
+- [ ] **agente_dns** — Zone transfer, DNSSEC check, registros SPF/DMARC/DKIM mal configurados, wildcard DNS. Wraps: `dnsx`, `dnsrecon`
+
+### Capacidades de Exploração e Pós-Reconhecimento
+
+- [ ] **agente_api** — Descoberta de endpoints REST/GraphQL, fuzz de parâmetros, detecção de CORS aberto, auth bypass em APIs. Wraps: `ffuf`, `arjun`
+- [ ] **agente_exploit** — Dado o output do Nuclei/Nmap, o supervisor sugere e confirma com o usuário antes de tentar exploits conhecidos via `searchsploit` / Metasploit RPC
+- [ ] **agente_bruteforce** — Brute-force de credenciais em serviços descobertos (SSH, FTP, RDP, SMB, HTTP Basic). Wraps: `hydra`, `medusa`
+- [ ] **agente_screenshot** — Captura automática de screenshots de todos os serviços HTTP/HTTPS ativos para triagem visual. Wraps: `gowitness`, `eyewitness`
+
+### Inteligência e Autonomia
+
+- [ ] **Pipeline de fases** — Modo autônomo sequencial: `recon → enum → vuln_scan → exploração → report`, com confirmação do usuário antes de cada fase destrutiva
+- [ ] **Modo aggressivo / lightweight** — Flag no chat para controlar intensidade (threads, timeout, técnicas usadas) sem editar código
+- [ ] **Correlação cruzada de resultados** — O supervisor cruza o output de todos os agentes para identificar padrões: portas abertas + serviço vulnerável + endpoint exposto = vetor de ataque priorizado
+- [ ] **Score de risco por alvo** — Ao fim de um scan completo, gerar um score (Crítico/Alto/Médio/Baixo) com base nas descobertas, similar ao CVSS mas contextualizado
+- [ ] **Replay de sessão** — Recarregar uma sessão anterior pelo ID e continuar de onde parou, sem repetir o que já foi scaneado
+
+### Reporting e Output
+
+- [ ] **Geração de relatório** — Exportar o resultado consolidado em Markdown e HTML com sumário executivo, tabela de vulnerabilidades, evidências e recomendações
+- [ ] **agente_diff** — Comparação automática entre dois relatórios do mesmo alvo em datas diferentes, destacando o que surgiu, o que foi corrigido e o que piorou (hoje o histórico existe, mas a análise de diff é manual)
+- [ ] **Notificação** — Webhook/Telegram quando um scan longo terminar ou quando uma vulnerabilidade crítica for encontrada
+
+### Infraestrutura
+
+- [ ] **Dry run** — Modo que imprime todos os comandos que seriam executados sem rodar nada, para revisão antes de um engajamento real
+- [ ] **Config por engajamento** — Arquivo `.conf` por alvo com scope, exclusões, wordlists preferidas e TTL de cache customizado
+- [ ] **Rate limiting configurável por alvo** — Perfis de velocidade salvos (stealth, normal, agressivo) que o supervisor aplica automaticamente baseado no tipo de alvo detectado
+
+---
+
 ## Aviso Legal
 
 > Este projeto é destinado exclusivamente a fins educacionais e a testes em sistemas **para os quais você possui autorização explícita**.  
