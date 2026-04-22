@@ -193,40 +193,77 @@ QuarkScan/
 
 ## To Do — Roadmap para Pentest Autônomo
 
-### Módulos de Reconhecimento (inspirados no Sophia)
+As seções seguem as fases de um engajamento real. Itens dentro de cada fase estão ordenados pela ordem natural de execução.
 
-- [ ] **agente_osint** — Certificate Transparency (crt.sh), Shodan, VirusTotal, WHOIS, ASN lookup, Google Dorks automatizados. Hoje o subfinder cobre só DNS passivo; OSINT amplia a superfície de ataque antes de qualquer scan ativo
-- [ ] **agente_ssl** — Análise de certificados TLS, ciphers fracos, BEAST/POODLE/Heartbleed, expiração. Wraps: `sslscan`, `testssl.sh`
-- [ ] **agente_cloud** — Detecção de buckets S3/Azure Blob/GCP expostos, endpoints de metadata (169.254.169.254), headers de provider. Wraps: `cloudenum`, `s3scanner`
-- [ ] **Múltiplos enumeradores de subdomínio** — Adicionar `amass`, `assetfinder` e `findomain` ao `agente_subfinder`, com deduplicação e merge automático dos resultados
-- [ ] **agente_dns** — Zone transfer, DNSSEC check, registros SPF/DMARC/DKIM mal configurados, wildcard DNS. Wraps: `dnsx`, `dnsrecon`
+### Fase 0 — Pré-Engajamento
 
-### Capacidades de Exploração e Pós-Reconhecimento
-
-- [ ] **agente_api** — Descoberta de endpoints REST/GraphQL, fuzz de parâmetros, detecção de CORS aberto, auth bypass em APIs. Wraps: `ffuf`, `arjun`
-- [ ] **agente_exploit** — Dado o output do Nuclei/Nmap, o supervisor sugere e confirma com o usuário antes de tentar exploits conhecidos via `searchsploit` / Metasploit RPC
-- [ ] **agente_bruteforce** — Brute-force de credenciais em serviços descobertos (SSH, FTP, RDP, SMB, HTTP Basic). Wraps: `hydra`, `medusa`
-- [ ] **agente_screenshot** — Captura automática de screenshots de todos os serviços HTTP/HTTPS ativos para triagem visual. Wraps: `gowitness`, `eyewitness`
-
-### Inteligência e Autonomia
-
-- [ ] **Pipeline de fases** — Modo autônomo sequencial: `recon → enum → vuln_scan → exploração → report`, com confirmação do usuário antes de cada fase destrutiva
-- [ ] **Modo aggressivo / lightweight** — Flag no chat para controlar intensidade (threads, timeout, técnicas usadas) sem editar código
-- [ ] **Correlação cruzada de resultados** — O supervisor cruza o output de todos os agentes para identificar padrões: portas abertas + serviço vulnerável + endpoint exposto = vetor de ataque priorizado
-- [ ] **Score de risco por alvo** — Ao fim de um scan completo, gerar um score (Crítico/Alto/Médio/Baixo) com base nas descobertas, similar ao CVSS mas contextualizado
-- [ ] **Replay de sessão** — Recarregar uma sessão anterior pelo ID e continuar de onde parou, sem repetir o que já foi scaneado
-
-### Reporting e Output
-
-- [ ] **Geração de relatório** — Exportar o resultado consolidado em Markdown e HTML com sumário executivo, tabela de vulnerabilidades, evidências e recomendações
-- [ ] **agente_diff** — Comparação automática entre dois relatórios do mesmo alvo em datas diferentes, destacando o que surgiu, o que foi corrigido e o que piorou (hoje o histórico existe, mas a análise de diff é manual)
-- [ ] **Notificação** — Webhook/Telegram quando um scan longo terminar ou quando uma vulnerabilidade crítica for encontrada
-
-### Infraestrutura
+Itens que definem *como* o teste será conduzido antes de qualquer ação no alvo.
 
 - [ ] **Dry run** — Modo que imprime todos os comandos que seriam executados sem rodar nada, para revisão antes de um engajamento real
 - [ ] **Config por engajamento** — Arquivo `.conf` por alvo com scope, exclusões, wordlists preferidas e TTL de cache customizado
 - [ ] **Rate limiting configurável por alvo** — Perfis de velocidade salvos (stealth, normal, agressivo) que o supervisor aplica automaticamente baseado no tipo de alvo detectado
+
+### Fase 1 — Reconhecimento Passivo
+
+Nenhum contato direto com o alvo. Apenas consulta de fontes públicas e APIs de terceiros.
+
+- [ ] **agente_osint** — Certificate Transparency (crt.sh), Shodan, VirusTotal, WHOIS, ASN lookup, Google Dorks automatizados. Amplia a superfície de ataque antes de qualquer contato com o alvo
+- [ ] **agente_github_recon** — Busca de secrets, credenciais, endpoints e configurações internas vazados em repositórios públicos. Fonte de alto impacto frequentemente ignorada. Wraps: `trufflehog`, `gitleaks`, `github-search`
+- [ ] **Múltiplos enumeradores de subdomínio (fontes passivas)** — Adicionar `assetfinder`, `findomain` e `chaos` ao `agente_subfinder`, consultando apenas APIs passivas (Shodan, crt.sh, VirusTotal). ~~amass~~ descontinuado — substituir por `chaos` (ProjectDiscovery). Resolução ativa e brute-force DNS pertencem à Fase 2
+
+### Fase 2 — Reconhecimento Ativo
+
+Contato direto com o alvo, mas não intrusivo. Base para calibrar todas as fases seguintes.
+
+- [ ] **agente_waf** — Detecta WAF/CDN *antes* de qualquer scan para ajustar a estratégia de evasão automaticamente. Hoje a evasão é reativa; saber o WAF primeiro muda a abordagem inteira. Wraps: `wafw00f`
+- [ ] **Resolução ativa e brute-force de subdomínios** — Após coletar candidatos passivamente (Fase 1), resolver e validar com `puredns`: brute-force de permutações contra resolvers recursivos. É ativo porque envia milhares de queries ao DNS do alvo
+- [ ] **agente_dns** — Zone transfer, DNSSEC check, registros SPF/DMARC/DKIM mal configurados, wildcard DNS, open relay SMTP. Wraps: `dnsx`, `dnsrecon`
+- [ ] **agente_ssl** — Análise detalhada de certificados TLS: ciphers fracos, BEAST/POODLE/Heartbleed, expiração. O Nuclei já cobre checks básicos; este agente gera output estruturado para relatório formal. Wraps: `testssl.sh`
+- [ ] **agente_cloud** — Detecção de buckets S3/Azure Blob/GCP expostos, endpoints de metadata (169.254.169.254), headers de cloud provider. Wraps: `cloudenum`, `s3scanner`
+
+### Fase 3 — Enumeração
+
+Mapeamento detalhado da superfície de ataque. Executado após o recon estabelecer os alvos prioritários.
+
+- [ ] **agente_crawler** — Spider inteligente de links e formulários para descobrir a superfície real antes do Gobuster (que é força bruta cega). Wraps: `katana` (ProjectDiscovery), `hakrawler`
+- [ ] **agente_js** — Análise de artefatos JavaScript já coletados pelo crawler ou subfinder — sem nova interação com o alvo. Extrai endpoints ocultos (`linkfinder`), secrets e tokens expostos em arquivos estáticos (`secretfinder`, `subjs`). Uma das maiores fontes de achados em pentest web moderno
+- [ ] **agente_screenshot** — Captura automática de screenshots de todos os serviços HTTP/HTTPS ativos para triagem visual rápida de alvos prioritários. Wraps: `gowitness`, `eyewitness`
+- [ ] **agente_cms** — Scanners específicos para CMS: plugins vulneráveis, temas desatualizados, usuários enumeráveis, configurações expostas. WordPress representa ~40% da web. Wraps: `wpscan`, `droopescan`, `cmseek`
+- [ ] **agente_api** — Descoberta passiva de endpoints REST/GraphQL via `arjun` (parâmetros) e inspeção de schema GraphQL (introspection), detecção de CORS aberto. Sem fuzzing agressivo — ffuf em modo de brute-force de rotas pertence à Fase 5
+- [ ] **agente_smb** — Enumeração read-only de shares, sessões nulas e usuários via `enum4linux-ng` e `smbclient`. Sem tentativas de autenticação ou coleta de hashes — crackmapexec com pass-pol ou relay pertence à Fase 5
+
+### Fase 4 — Análise de Vulnerabilidades
+
+Consolidação e priorização do que foi descoberto nas fases anteriores.
+
+- [ ] **Correlação cruzada de resultados** — O supervisor cruza o output de todos os agentes para identificar padrões: porta aberta + serviço vulnerável + endpoint exposto = vetor de ataque priorizado
+- [ ] **Score de risco por alvo** — Ao fim de um scan completo, gerar um score (Crítico/Alto/Médio/Baixo) com base nas descobertas, contextualizado pelo ambiente (web, infra, cloud)
+
+### Fase 5 — Exploração
+
+Requer confirmação explícita do usuário antes de cada ação. Log de auditoria obrigatório.
+
+- [ ] **agente_exploit** — Dado o output do Nuclei/Nmap, o supervisor sugere e confirma com o usuário antes de tentar exploits conhecidos. Wraps: `searchsploit`, Metasploit RPC
+- [ ] **agente_sqli** — Detecção e exploração de SQL injection em parâmetros e formulários identificados pelo crawler/gobuster. Wraps: `sqlmap`
+- [ ] **agente_bruteforce** — Brute-force de credenciais em serviços descobertos (SSH, FTP, RDP, HTTP Basic). Wraps: `hydra`, `medusa`
+- [ ] **Fuzzing agressivo de API** — ffuf em modo de brute-force de rotas sobre os endpoints descobertos pelo `agente_api` na Fase 3. Separado da descoberta por poder gerar lockout e trigger de IPS
+- [ ] **Autenticação e relay SMB** — crackmapexec com pass-pol, tentativas de login e relay de hashes NTLMv2 sobre os shares e usuários descobertos pelo `agente_smb` na Fase 3. Separado da enumeração pelo mesmo motivo
+
+### Automação e Inteligência
+
+Funcionalidades que elevam o agente de ferramenta para plataforma autônoma.
+
+- [ ] **Pipeline de fases** — Modo autônomo sequencial: `recon passivo → recon ativo → enumeração → análise → exploração → report`, com confirmação do usuário antes de cada fase destrutiva
+- [ ] **Modo agressivo / lightweight** — Flag no chat para controlar intensidade (threads, timeout, técnicas) sem editar código
+- [ ] **Memória de alvo persistente** — Knowledge graph que cresce entre engajamentos: qual IP pertence a qual ASN, quais subdomínios já foram vistos, quais serviços historicamente vulneráveis. Diferente do histórico atual, que armazena outputs brutos
+- [ ] **Replay de sessão** — Recarregar uma sessão anterior pelo ID e continuar de onde parou, sem repetir o que já foi scaneado
+- [ ] **Modo MCP server** — Expor o QuarkScan como MCP server para ser invocado por outros agentes (Claude Code, etc.), permitindo integração em pipelines maiores
+
+### Reporting
+
+- [ ] **agente_report com LLM** — Usar o LLM para redigir o sumário executivo automaticamente com as descobertas priorizadas, exportando em Markdown e HTML com tabela de vulnerabilidades e evidências
+- [ ] **agente_diff** — Comparação automática entre dois relatórios do mesmo alvo em datas diferentes, destacando o que surgiu, o que foi corrigido e o que piorou (hoje o histórico existe, mas a análise de diff é manual)
+- [ ] **Notificação** — Webhook/Telegram quando um scan longo terminar ou quando uma vulnerabilidade crítica for encontrada
 
 ---
 
