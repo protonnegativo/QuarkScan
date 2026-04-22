@@ -1,11 +1,11 @@
 from langchain_core.tools import tool
-from langchain_google_genai import ChatGoogleGenerativeAI
+from llm import criar_llm
 from langgraph.prebuilt import create_react_agent
 from prompts import PROMPT_HISTORICO
 from tools.historico import listar_alvos_salvos, consultar_historico, comparar_scans
 from agents.base import invocar
 
-_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+_llm = criar_llm("historico")
 _agente = create_react_agent(
     _llm,
     tools=[listar_alvos_salvos, consultar_historico, comparar_scans],

@@ -1,4 +1,4 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
+from llm import criar_llm
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
 from prompts import PROMPT_SUPERVISOR
@@ -11,7 +11,7 @@ from agents.whatweb import agente_whatweb
 from agents.subfinder import agente_subfinder
 from agents.historico import agente_historico
 
-_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+_llm = criar_llm("supervisor")
 _memoria = MemorySaver()
 
 supervisor = create_react_agent(

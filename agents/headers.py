@@ -1,11 +1,11 @@
 from langchain_core.tools import tool
-from langchain_google_genai import ChatGoogleGenerativeAI
+from llm import criar_llm
 from langgraph.prebuilt import create_react_agent
 from prompts import PROMPT_HEADERS
 from tools.headers import analisar_headers
 from agents.base import invocar
 
-_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+_llm = criar_llm("headers")
 _agente = create_react_agent(_llm, tools=[analisar_headers], prompt=PROMPT_HEADERS)
 
 
