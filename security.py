@@ -73,6 +73,18 @@ def validar_args(argumentos: str) -> list:
     return resultado
 
 
+_INPUT_MAX_LEN = 2000
+_CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def sanitizar_input(texto: str) -> str:
+    """Remove caracteres de controle e limita o tamanho do input do usuário."""
+    texto = _CTRL_RE.sub("", texto)
+    if len(texto) > _INPUT_MAX_LEN:
+        texto = texto[:_INPUT_MAX_LEN]
+    return texto.strip()
+
+
 def validar_alvo(alvo: str) -> str | None:
     alvo_limpo = alvo.replace("https://", "").replace("http://", "").split("/")[0].strip()
     if re.match(r"^[a-zA-Z0-9.\-]+$", alvo_limpo):

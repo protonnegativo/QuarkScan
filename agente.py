@@ -10,6 +10,7 @@ if not os.environ.get("GEMINI_API_KEY"):
 
 from agents.supervisor import supervisor
 from pipeline import detectar_alvo_pipeline, executar_pipeline
+from security import sanitizar_input
 from terminal import C, formatar_para_terminal
 
 config = {"configurable": {"thread_id": str(uuid.uuid4())}}
@@ -27,6 +28,8 @@ while True:
 
     if not pergunta:
         continue
+
+    pergunta = sanitizar_input(pergunta)
 
     if pergunta.lower() in ["sair", "exit", "quit"]:
         break

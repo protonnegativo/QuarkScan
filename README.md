@@ -5,7 +5,7 @@ Interface conversacional em português — você descreve o objetivo, o agente d
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-ReAct-orange)
-![Gemini](https://img.shields.io/badge/Gemini-2.5%20Flash-4285F4?logo=google&logoColor=white)
+![AI](https://img.shields.io/badge/AI-Multi--Provider-blueviolet)
 ![Docker](https://img.shields.io/badge/Docker-Ubuntu%2022.04-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
@@ -289,7 +289,7 @@ As seções seguem as fases de um engajamento real. Itens dentro de cada fase es
 | **agente_crawler** | Spider inteligente de links e formulários. Descobre a superfície real antes do Gobuster, que é força bruta cega | `katana`, `hakrawler` |
 | **agente_js** | Analisa artefatos JS já coletados pelo crawler — sem nova interação com o alvo. Extrai endpoints ocultos, secrets e tokens em arquivos estáticos | `linkfinder`, `secretfinder`, `subjs` |
 | **agente_screenshot** | Screenshots de todos os serviços HTTP/HTTPS ativos para triagem visual de alvos prioritários | `gowitness`, `eyewitness` |
-| **agente_cms** | Plugins vulneráveis, temas desatualizados, usuários enumeráveis. WordPress representa ~40% da web | `wpscan`, `droopescan`, `cmseek` |
+| **agente_cms** | Scan completo de WordPress (plugins/temas vulneráveis, usuários enumeráveis, xmlrpc, senhas fracas), Joomla e Drupal. WordPress representa ~40% da web — prioridade alta | `wpscan`, `droopescan`, `cmseek` |
 | **agente_api** | Discovery passivo: endpoints REST/GraphQL via `arjun`, introspection GraphQL, detecção de CORS aberto. Sem fuzzing agressivo — ffuf pertence à Fase 5 | `arjun` |
 | **agente_smb** | Enumeração read-only: shares, sessões nulas, usuários. Sem autenticação ou coleta de hashes — crackmapexec pertence à Fase 5 | `enum4linux-ng`, `smbclient` |
 
@@ -321,6 +321,7 @@ As seções seguem as fases de um engajamento real. Itens dentro de cada fase es
 | Item | Descrição |
 |---|---|
 | ~~**Pipeline de fases**~~ | ✓ Implementado — `pipeline em <alvo>` |
+| **Suporte a múltiplos provedores de IA** | Abstrair o LLM para suportar OpenAI (GPT-4o), Anthropic (Claude), Ollama (local) e Groq além do Gemini. Cada agente poderia usar um provedor diferente via env var — ex: `NMAP_LLM_PROVIDER=ollama` para rodar offline |
 | **Modo agressivo / lightweight** | Flag no chat para controlar intensidade (threads, timeout, técnicas) sem editar código |
 | **Memória de alvo persistente** | Knowledge graph acumulativo entre engajamentos: IP → ASN, subdomínios vistos, serviços historicamente vulneráveis. Diferente do histórico atual, que armazena outputs brutos |
 | **Replay de sessão** | Recarregar sessão anterior pelo ID e continuar de onde parou, sem repetir o que já foi scaneado |
