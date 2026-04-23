@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 from langchain_core.tools import tool
@@ -134,6 +135,8 @@ def executar_nuclei(
         storage.salvar(alvo_limpo, "nuclei", saida, {
             "tags": tags, "severidade": severidade, "porta": porta, "ssl": ssl,
         })
+        if os.environ.get("QUARKSCAN_RAW"):
+            print(f"\n[RAW nuclei]\n{saida}\n[/RAW]\n")
         return _truncar(saida)
     except subprocess.TimeoutExpired:
         return "Erro: timeout (600s)."

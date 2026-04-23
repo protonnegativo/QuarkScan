@@ -79,6 +79,13 @@ Você: "scan completo em exemplo.com"
 - [Docker](https://docs.docker.com/get-docker/) — todas as ferramentas rodam no container
 - Chave de API do [Google Gemini](https://aistudio.google.com/apikey) — `gemini-2.5-flash` é gratuito no tier de desenvolvimento
 
+> **Permissão no Docker (Linux):** após instalar o Docker, adicione seu usuário ao grupo `docker` para evitar o erro `permission denied` no socket:
+> ```bash
+> sudo usermod -aG docker $USER
+> newgrp docker
+> ```
+> Se o `newgrp` não funcionar, faça logout/login para que o grupo seja aplicado.
+
 ---
 
 ## Instalação
@@ -100,6 +107,9 @@ GEMINI_API_KEY=sua_chave_aqui
 # Override por agente — útil para usar Pro no supervisor e Flash nos demais
 # GEMINI_MODEL_SUPERVISOR=gemini-2.5-pro
 # GEMINI_MODEL_NMAP=gemini-2.5-flash
+
+# Exibe o output bruto das ferramentas antes do LLM processar (opcional)
+# QUARKSCAN_RAW=1
 ```
 
 ---
@@ -133,6 +143,18 @@ O agente consulta o banco antes de executar cada scan. Se houver resultado recen
 ```
 refaz o nmap em exemplo.com com resultado atualizado
 ```
+
+### Output bruto das ferramentas
+
+Por padrão, o output das ferramentas passa pelo LLM antes de chegar ao terminal. Para ver o output bruto de cada ferramenta imediatamente após a execução — antes de qualquer interpretação — ative a variável de ambiente `QUARKSCAN_RAW`:
+
+```bash
+QUARKSCAN_RAW=1 ./start_agent.sh
+```
+
+Com a flag ativa, o terminal exibe o output bruto entre marcadores `[RAW ferramenta]` / `[/RAW]` logo após a execução do comando, seguido do output formatado pelo LLM normalmente. Útil para auditoria, debug e verificação de que os resultados estão sendo interpretados corretamente.
+
+---
 
 ### Pipeline autônomo
 

@@ -1,3 +1,4 @@
+import os
 import subprocess
 from langchain_core.tools import tool
 from security import validar_alvo
@@ -89,6 +90,8 @@ def executar_whatweb(
         storage.salvar(alvo_limpo, "whatweb", saida, {
             "agressividade": nivel, "perfil": perfil_navegador,
         })
+        if os.environ.get("QUARKSCAN_RAW"):
+            print(f"\n[RAW whatweb]\n{saida}\n[/RAW]\n")
         return _truncar(saida)
     except subprocess.TimeoutExpired:
         return f"Erro: timeout ({timeout + 30}s)."

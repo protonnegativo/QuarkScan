@@ -1,3 +1,4 @@
+import os
 import requests
 import urllib3
 from langchain_core.tools import tool
@@ -108,6 +109,8 @@ def analisar_headers(
             f"OWASP FALTANDO: {', '.join(faltantes) if faltantes else 'Nenhum ✅'}"
         )
         storage.salvar(alvo_limpo, "headers", saida, {"protocolo": protocolo, "porta": porta, "perfil": perfil_navegador})
+        if os.environ.get("QUARKSCAN_RAW"):
+            print(f"\n[RAW headers]\n{saida}\n[/RAW]\n")
         return _truncar(saida)
     except Exception as e:
         return str(e)

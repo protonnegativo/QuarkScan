@@ -1,3 +1,4 @@
+import os
 import subprocess
 from langchain_core.tools import tool
 from security import FLAGS_PERMITIDAS, validar_args, validar_alvo
@@ -62,6 +63,8 @@ def executar_nmap(alvo: str, argumentos: str, forcar_novo: bool = False) -> str:
         resultado = subprocess.run(comando, capture_output=True, text=True, timeout=300)
         saida = resultado.stdout or resultado.stderr
         storage.salvar(alvo_limpo, "nmap", saida, {"argumentos": argumentos})
+        if os.environ.get("QUARKSCAN_RAW"):
+            print(f"\n[RAW nmap]\n{saida}\n[/RAW]\n")
         return _truncar(saida)
     except subprocess.TimeoutExpired:
         return "Erro: timeout (300s). Use --top-ports ou menos portas."

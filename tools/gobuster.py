@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 from langchain_core.tools import tool
@@ -138,6 +139,8 @@ def executar_gobuster(
         storage.salvar(alvo_limpo, "gobuster", saida, {
             "wordlist": wordlist, "extensoes": extensoes, "perfil": perfil_navegador,
         })
+        if os.environ.get("QUARKSCAN_RAW"):
+            print(f"\n[RAW gobuster]\n{saida}\n[/RAW]\n")
         return _truncar(saida)
     except subprocess.TimeoutExpired:
         return "Erro: timeout (300s). Tente wordlist menor ou aumente threads."

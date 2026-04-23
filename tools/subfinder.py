@@ -1,3 +1,4 @@
+import os
 import subprocess
 from langchain_core.tools import tool
 from security import validar_alvo
@@ -112,6 +113,8 @@ def executar_subfinder(
         storage.salvar(alvo_limpo, "subfinder", saida_completa, {
             "recursivo": recursivo, "todas_fontes": todas_fontes,
         })
+        if os.environ.get("QUARKSCAN_RAW"):
+            print(f"\n[RAW subfinder]\n{saida_completa}\n[/RAW]\n")
         return _truncar(saida_bruta) + prioritarios
     except subprocess.TimeoutExpired:
         return f"Erro: timeout ({timeout}s)."

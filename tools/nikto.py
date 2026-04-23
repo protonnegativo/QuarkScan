@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 from langchain_core.tools import tool
@@ -113,6 +114,8 @@ def executar_nikto(
             "porta": porta, "ssl": ssl, "perfil": perfil_navegador,
             "evasao": evasao, "raiz": raiz, "vhost": vhost,
         })
+        if os.environ.get("QUARKSCAN_RAW"):
+            print(f"\n[RAW nikto]\n{saida}\n[/RAW]\n")
         return _truncar(saida)
     except subprocess.TimeoutExpired:
         return f"Erro: timeout ({timeout}s)."
