@@ -3,6 +3,7 @@ import subprocess
 from langchain_core.tools import tool
 from security import validar_alvo, guardrail_check
 from session import ja_executado, registrar
+from terminal import executar_com_monitoramento, truncar_inteligente
 import storage
 
 _KEYWORDS_INTERESSE = {
@@ -13,21 +14,6 @@ _KEYWORDS_INTERESSE = {
 }
 
 _MAX_CHARS = 8000
-
-
-def _truncar(texto: str) -> str:
-    if len(texto) <= _MAX_CHARS:
-        return texto
-    linhas = texto.splitlines()
-    resultado = []
-    chars = 0
-    for linha in linhas:
-        if chars + len(linha) > _MAX_CHARS:
-            resultado.append(f"... [{len(linhas)} subdomínios total — exibindo primeiros {len(resultado)}]")
-            break
-        resultado.append(linha)
-        chars += len(linha) + 1
-    return "\n".join(resultado)
 
 
 def _prioritarios(saida: str) -> str:
@@ -81,7 +67,7 @@ def executar_subfinder(
         cache = storage.resultado_recente(alvo_limpo, "subfinder", horas=72)
         if cache:
             registrar(alvo_limpo, "subfinder", str(recursivo), str(todas_fontes))
-            return f"[CACHE {cache['timestamp']}] Use forcar_novo=True para re-executar.\n\n{_truncar(cache['resultado'])}"
+            return f"[CACHE {cache['timestamp']}] Use forcar_novo=True para re-executar.\n\n{truncar_inteligente(cache['resultado'], _MAX_CHARS)}"
 
     registrar(alvo_limpo, "subfinder", str(recursivo), str(todas_fontes))
 
@@ -109,20 +95,37 @@ def executar_subfinder(
 
     timeout = 240 if recursivo or todas_fontes else 120
     try:
-        resultado = subprocess.run(comando, capture_output=True, text=True, timeout=timeout)
-        saida_bruta = resultado.stdout.strip()
+        res = executar_com_monitoramento(comando, timeout=timeout, ferramenta="subfinder", alvo=alvo_limpo)
+        saida_bruta = res.stdout.strip()
+        if not saida_bruta and not res.sucesso:
+            return res.erro_autocorrecao(
+                "verifique conexão com a internet e se o domínio existe. "
+                "Para domínios internos, tente todas_fontes=False e sem_wildcards=False"
+            )
         if not saida_bruta:
+            storage.salvar_metrica("subfinder", alvo_limpo, res.exit_code, res.duracao_ms, True)
             return "Nenhum subdomínio encontrado."
         prioritarios = _prioritarios(saida_bruta)
         saida_completa = saida_bruta + prioritarios
         storage.salvar(alvo_limpo, "subfinder", saida_completa, {
             "recursivo": recursivo, "todas_fontes": todas_fontes,
         })
+        storage.salvar_metrica("subfinder", alvo_limpo, res.exit_code, res.duracao_ms, res.sucesso)
         if os.environ.get("QUARKSCAN_RAW"):
             print(f"\n[RAW subfinder]\n{saida_completa}\n[/RAW]\n")
-        return _truncar(saida_bruta) + prioritarios
+        # Truncation preserves the tail (SUBDOMÍNIOS_PRIORITÁRIOS section)
+        linhas = saida_bruta.splitlines()
+        resultado_linhas = []
+        chars = 0
+        for linha in linhas:
+            if chars + len(linha) > _MAX_CHARS:
+                resultado_linhas.append(f"... [{len(linhas)} subdomínios total — exibindo primeiros {len(resultado_linhas)}]")
+                break
+            resultado_linhas.append(linha)
+            chars += len(linha) + 1
+        return "\n".join(resultado_linhas) + prioritarios
     except subprocess.TimeoutExpired:
-        return f"Erro: timeout ({timeout}s)."
+        return f"Erro: timeout ({timeout}s). Use max_tempo=5 para limitar a varredura."
     except FileNotFoundError:
         return "Erro: subfinder não encontrado."
     except Exception as e:

@@ -56,6 +56,20 @@ def _init():
                 UNIQUE(alvo_raiz, subdominio)
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS metricas_execucao (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                ferramenta  TEXT NOT NULL,
+                alvo        TEXT NOT NULL,
+                exit_code   INTEGER,
+                duracao_ms  INTEGER,
+                sucesso     INTEGER DEFAULT 1,
+                timestamp   TEXT DEFAULT (datetime('now', 'localtime'))
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_metricas ON metricas_execucao(ferramenta, alvo)"
+        )
 
 
 _init()
@@ -207,6 +221,42 @@ def marcar_subdominio_scaneado(alvo_raiz: str, subdominio: str, ferramenta: str)
             "ferramentas=excluded.ferramentas, ultimo_scan=datetime('now','localtime')",
             (alvo_raiz.lower(), subdominio.lower(), json.dumps(ferramentas)),
         )
+
+
+# ─── Métricas de Execução ─────────────────────────────────────────────────────
+
+def salvar_metrica(ferramenta: str, alvo: str, exit_code: int, duracao_ms: int, sucesso: bool) -> None:
+    """Registra métricas de cada execução para aprendizado sobre estabilidade das ferramentas."""
+    with _conn() as conn:
+        conn.execute(
+            "INSERT INTO metricas_execucao (ferramenta, alvo, exit_code, duracao_ms, sucesso) "
+            "VALUES (?,?,?,?,?)",
+            (ferramenta, alvo.lower(), exit_code, duracao_ms, 1 if sucesso else 0),
+        )
+
+
+def estatisticas_ferramenta(ferramenta: str, alvo: str = None) -> dict:
+    """Retorna taxa de sucesso e duração média de uma ferramenta (global ou por alvo)."""
+    with _conn() as conn:
+        if alvo:
+            row = conn.execute(
+                "SELECT COUNT(*) AS total, AVG(duracao_ms) AS avg_ms, SUM(sucesso) AS sucessos "
+                "FROM metricas_execucao WHERE ferramenta=? AND alvo=?",
+                (ferramenta, alvo.lower()),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COUNT(*) AS total, AVG(duracao_ms) AS avg_ms, SUM(sucesso) AS sucessos "
+                "FROM metricas_execucao WHERE ferramenta=?",
+                (ferramenta,),
+            ).fetchone()
+    if not row or not row["total"]:
+        return {}
+    return {
+        "total_execucoes": row["total"],
+        "duracao_media_ms": int(row["avg_ms"] or 0),
+        "taxa_sucesso_pct": round((row["sucessos"] or 0) / row["total"] * 100, 1),
+    }
 
 
 def resumo_memoria(alvo_raiz: str) -> dict:

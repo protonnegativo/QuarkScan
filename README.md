@@ -54,6 +54,13 @@ Você: "pipeline em exemplo.com"
 - **Pipeline LangGraph (StateGraph)** — grafo de estado com fallback automático: se subfinder retornar zero resultados, aciona DNS brute-force automaticamente antes de prosseguir
 - **Fases destrutivas com gate de confirmação** — recon passivo e ativo sem confirmação; enumeração e vuln analysis exigem aprovação interativa
 - **Validation Guardrails** — camada universal de segurança em todos os tools: regex (9 padrões de injeção) + análise semântica LLM + rate limiting por tool/alvo
+- **Protocolo GO/NO-GO** — supervisor avalia autorização, completude do recon passivo e risco operacional antes de qualquer scan agressivo
+- **Chain of Thought obrigatório** — todos os agentes justificam tecnicamente cada escolha de ferramenta e parâmetro antes de executar (`→ ESCOLHA / → OBJETIVO`)
+- **Perfis de operador ofensivo** — três papéis com instruções e restrições distintas: `recon_specialist`, `infiltration_specialist` e `reporting_auditor`
+- **Tool Self-Correction** — quando uma ferramenta retorna exit code ≠ 0, a mensagem de erro inclui dica de correção estruturada para o agente ReAct reparar os parâmetros e reinvocar autonomamente
+- **Progress Monitoring** — heartbeat a cada 30–60s em execuções longas (nmap -p-, nuclei, gobuster); mostra tempo decorrido/total em tempo real
+- **Smart Truncation** — outputs grandes são cortados 65% cabeça + 35% cauda para preservar início (contexto) e fim (achados/conclusões) em vez de truncar linearmente
+- **Métricas de execução** — cada chamada de ferramenta registra exit_code, duração e taxa de sucesso no SQLite; agentes aprendem quais ferramentas são instáveis no alvo atual
 - **Memória de longo prazo** — vulnerabilidades descobertas e subdomínios scaneados persistem entre sessões; evita rescans redundantes e economiza API
 - **Bypass Analyst** — agente Red Team que revisa payloads e propõe variações para evadir assinaturas de WAF (ModSecurity CRS, Cloudflare, AWS WAF, Imperva, F5)
 - **Modelo configurável** — troca o modelo de qualquer agente via env var; cada agente pode usar um modelo diferente
@@ -222,6 +229,7 @@ Tipos suportados: `sqli`, `xss`, `lfi`, `rce`, `ssti`, `xxe`, `ssrf`
 | Controle | Detalhe |
 |---|---|
 | **Validation Guardrails** | Camada universal em todos os tools: 9 padrões regex (metacaracteres, path traversal, backtick, cmd substitution, null bytes, etc.) + análise semântica LLM + rate limiting 5 calls/60s por tool/alvo |
+| **GO/NO-GO Adversarial Review** | Supervisor avalia autorização, completude do recon passivo e risco operacional antes de scans agressivos (nikto, nuclei, gobuster ≥medium); downgrade automático para versão passiva se condições não forem satisfeitas |
 | Flags Nmap | Allowlist explícita — inclui `-sS/sT/sU/sV/sN/sF/sX`, `--top-ports`, `--min-rate`, `-PE/-PS/-PA` e outros |
 | Scripts NSE | Restritos a: `vuln`, `default`, `safe`, `discovery`, `http-headers`, `ssl-enum-ciphers`, `ssl-cert`, `banner`, `http-methods`, `ftp-anon`, `ssh-hostkey`, `smb-vuln-ms17-010` e outros |
 | Alvos | Validados por regex — apenas domínios e IPs válidos aceitos |
@@ -244,10 +252,10 @@ QuarkScan/
 ├── llm.py               # Resolução de modelo via env var (GEMINI_MODEL_*)
 ├── prompts.py           # System prompts de todos os agentes
 ├── security.py          # Allowlist Nmap · validação de alvos · ValidationGuardrails
-├── storage.py           # SQLite: resultados · cache TTL · memória de vulns/subdomínios
+├── storage.py           # SQLite: resultados · cache TTL · memória de vulns/subdomínios · métricas de execução
 ├── session.py           # Deduplicação de chamadas por sessão (SHA-256)
-├── profiles.py          # Perfis de navegador para evasão WAF
-├── terminal.py          # Formatação colorida do output
+├── profiles.py          # Perfis de navegador (Chrome/Firefox/Safari/Googlebot) + PERFIS_AGENTE (recon/infiltration/reporting)
+├── terminal.py          # Formatação colorida · executar_com_monitoramento() · truncar_inteligente()
 ├── agents/
 │   ├── base.py          # invocar() com recursion_limit e tratamento de erros
 │   ├── supervisor.py    # Orquestrador LangGraph com MemorySaver
@@ -260,7 +268,7 @@ QuarkScan/
 │   ├── whatweb.py
 │   ├── subfinder.py
 │   └── historico.py
-├── tools/               # Wrappers com guardrail_check() antes do subprocess
+├── tools/               # Wrappers com guardrail_check() · monitoramento · self-correction hints
 │   ├── bypass.py        # Análise de bypass WAF com cache 7 dias
 │   ├── nmap.py
 │   ├── headers.py

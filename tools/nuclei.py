@@ -4,6 +4,7 @@ import subprocess
 from langchain_core.tools import tool
 from security import validar_alvo, guardrail_check
 from session import ja_executado, registrar
+from terminal import executar_com_monitoramento, truncar_inteligente
 import storage
 
 _TAGS_VALIDAS = {
@@ -13,12 +14,6 @@ _TAGS_VALIDAS = {
 _SEVERIDADES_VALIDAS = {"info", "low", "medium", "high", "critical"}
 _PROXY_RE = re.compile(r"^https?://[a-zA-Z0-9.\-]+(:\d+)?$")
 _MAX_CHARS = 8000
-
-
-def _truncar(texto: str) -> str:
-    if len(texto) <= _MAX_CHARS:
-        return texto
-    return texto[:_MAX_CHARS] + f"\n... [saída truncada — {len(texto)} chars total]"
 
 
 def _validar_lista(valor: str, permitidos: set, nome: str) -> tuple[str | None, str | None]:
@@ -95,7 +90,7 @@ def executar_nuclei(
         cache = storage.resultado_recente(alvo_limpo, "nuclei", horas=24)
         if cache:
             registrar(alvo_limpo, "nuclei", chave_extra)
-            return f"[CACHE {cache['timestamp']}] Use forcar_novo=True para re-executar.\n\n{_truncar(cache['resultado'])}"
+            return f"[CACHE {cache['timestamp']}] Use forcar_novo=True para re-executar.\n\n{truncar_inteligente(cache['resultado'], _MAX_CHARS)}"
 
     registrar(alvo_limpo, "nuclei", chave_extra)
 
@@ -123,19 +118,23 @@ def executar_nuclei(
     print(f"[nuclei] Executando: {' '.join(comando)}")
 
     try:
-        resultado = subprocess.run(comando, capture_output=True, text=True, timeout=600)
-        saida = resultado.stdout.strip()
-        if not saida and resultado.stderr.strip():
-            saida = resultado.stderr.strip()
+        res = executar_com_monitoramento(comando, timeout=600, ferramenta="nuclei", alvo=alvo_limpo, heartbeat_interval=60)
+        saida = res.saida_principal()
         if not saida:
             saida = "Nenhuma vulnerabilidade encontrada com os templates e filtros especificados."
+        if not res.sucesso and not res.stdout.strip():
+            saida = res.erro_autocorrecao(
+                "tente ssl=False para certificados autoassinados, ou reduza o escopo com tags mais específicas. "
+                f"Tags disponíveis: {', '.join(sorted(_TAGS_VALIDAS))}"
+            )
         storage.salvar(alvo_limpo, "nuclei", saida, {
             "tags": tags_validadas, "severidade": severidades_validadas,
             "rate_limit": rate_limit, "timeout": timeout,
         })
+        storage.salvar_metrica("nuclei", alvo_limpo, res.exit_code, res.duracao_ms, res.sucesso)
         if os.environ.get("QUARKSCAN_RAW"):
             print(f"\n[RAW nuclei]\n{saida}\n[/RAW]\n")
-        return _truncar(saida)
+        return truncar_inteligente(saida, _MAX_CHARS)
     except subprocess.TimeoutExpired:
         return "Erro: timeout (600s). Reduza o escopo com tags mais específicas."
     except FileNotFoundError:

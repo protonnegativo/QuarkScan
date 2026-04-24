@@ -5,18 +5,13 @@ from langchain_core.tools import tool
 from security import validar_alvo, guardrail_check
 from profiles import obter_perfil, perfis_disponiveis
 from session import ja_executado, registrar
+from terminal import executar_com_monitoramento, truncar_inteligente
 import storage
 
 _EVASAO_RE = re.compile(r"^[1-8](,[1-8])*$")
 _PORT_RE = re.compile(r"^\d{1,5}$")
 _PLUGIN_RE = re.compile(r"^[a-zA-Z0-9_,]+$")
 _MAX_CHARS = 6000
-
-
-def _truncar(texto: str) -> str:
-    if len(texto) <= _MAX_CHARS:
-        return texto
-    return texto[:_MAX_CHARS] + f"\n... [saída truncada — {len(texto)} chars total]"
 
 
 @tool
@@ -79,7 +74,7 @@ def executar_nikto(
         cache = storage.resultado_recente(alvo_limpo, "nikto", horas=24)
         if cache:
             registrar(alvo_limpo, "nikto", chave_extra)
-            return f"[CACHE {cache['timestamp']}] Use forcar_novo=True para re-executar.\n\n{_truncar(cache['resultado'])}"
+            return f"[CACHE {cache['timestamp']}] Use forcar_novo=True para re-executar.\n\n{truncar_inteligente(cache['resultado'], _MAX_CHARS)}"
 
     registrar(alvo_limpo, "nikto", chave_extra)
 
@@ -117,16 +112,22 @@ def executar_nikto(
     print(f"[nikto] Executando: {' '.join(comando)}")
 
     try:
-        resultado = subprocess.run(comando, capture_output=True, text=True, timeout=360)
-        saida = resultado.stdout.strip() or resultado.stderr.strip()
+        res = executar_com_monitoramento(comando, timeout=360, ferramenta="nikto", alvo=alvo_limpo)
+        saida = res.saida_principal()
         if not saida:
             saida = "Nenhum resultado retornado pelo Nikto."
+        if not res.sucesso and not res.stdout.strip():
+            saida = res.erro_autocorrecao(
+                "tente porta=443 com ssl=True para HTTPS, ou porta=80 para HTTP. "
+                "Para evasão de WAF, use perfil_navegador='chrome' + evasao='1,2,6' + pausa=2"
+            )
         storage.salvar(alvo_limpo, "nikto", saida, {
             "porta": porta, "ssl": ssl, "evasao": evasao, "plugins": plugins,
         })
+        storage.salvar_metrica("nikto", alvo_limpo, res.exit_code, res.duracao_ms, res.sucesso)
         if os.environ.get("QUARKSCAN_RAW"):
             print(f"\n[RAW nikto]\n{saida}\n[/RAW]\n")
-        return _truncar(saida)
+        return truncar_inteligente(saida, _MAX_CHARS)
     except subprocess.TimeoutExpired:
         return "Erro: timeout (360s). Tente com plugins específicos ou porta diferente."
     except FileNotFoundError:

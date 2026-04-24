@@ -5,6 +5,7 @@ from langchain_core.tools import tool
 from security import validar_alvo, guardrail_check
 from profiles import obter_perfil, perfis_disponiveis
 from session import ja_executado, registrar
+from terminal import executar_com_monitoramento, truncar_inteligente
 import storage
 
 WORDLISTS_PERMITIDAS = {
@@ -17,12 +18,6 @@ WORDLISTS_PERMITIDAS = {
 _EXTENSOES_RE = re.compile(r"^[a-zA-Z0-9,]{1,50}$")
 _STATUS_RE = re.compile(r"^[\d,]+$")
 _MAX_CHARS = 5000
-
-
-def _truncar(texto: str) -> str:
-    if len(texto) <= _MAX_CHARS:
-        return texto
-    return texto[:_MAX_CHARS] + f"\n... [saída truncada — {len(texto)} chars total]"
 
 
 @tool
@@ -95,7 +90,7 @@ def executar_gobuster(
         cache = storage.resultado_recente(alvo_limpo, "gobuster", horas=48)
         if cache:
             registrar(alvo_limpo, "gobuster", wordlist, extensoes, perfil_navegador)
-            return f"[CACHE {cache['timestamp']}] Use forcar_novo=True para re-executar.\n\n{_truncar(cache['resultado'])}"
+            return f"[CACHE {cache['timestamp']}] Use forcar_novo=True para re-executar.\n\n{truncar_inteligente(cache['resultado'], _MAX_CHARS)}"
 
     registrar(alvo_limpo, "gobuster", wordlist, extensoes, perfil_navegador)
 
@@ -139,17 +134,25 @@ def executar_gobuster(
     print(f"[gobuster] Executando: {' '.join(comando)}")
 
     try:
-        resultado = subprocess.run(comando, capture_output=True, text=True, timeout=300)
-        saida = resultado.stdout.strip() or "Nenhum diretório encontrado com esta wordlist."
+        res = executar_com_monitoramento(comando, timeout=300, ferramenta="gobuster", alvo=alvo_limpo)
+        saida = res.stdout.strip()
+        if not saida and not res.sucesso:
+            saida = res.erro_autocorrecao(
+                "verifique se a wordlist existe no caminho configurado. "
+                f"Wordlists disponíveis: {', '.join(WORDLISTS_PERMITIDAS.keys())}"
+            )
+        elif not saida:
+            saida = "Nenhum diretório encontrado com esta wordlist."
         storage.salvar(alvo_limpo, "gobuster", saida, {
             "wordlist": wordlist, "extensoes": extensoes, "perfil": perfil_navegador,
         })
+        storage.salvar_metrica("gobuster", alvo_limpo, res.exit_code, res.duracao_ms, res.sucesso)
         if os.environ.get("QUARKSCAN_RAW"):
             print(f"\n[RAW gobuster]\n{saida}\n[/RAW]\n")
-        return _truncar(saida)
+        return truncar_inteligente(saida, _MAX_CHARS)
     except subprocess.TimeoutExpired:
         return "Erro: timeout (300s). Tente wordlist menor ou aumente threads."
     except FileNotFoundError:
-        return "Erro: gobuster não encontrado."
+        return "Erro: gobuster não encontrado. Verifique a instalação."
     except Exception as e:
         return str(e)

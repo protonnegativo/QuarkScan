@@ -53,3 +53,60 @@ def obter_perfil(nome: str) -> dict:
 
 def perfis_disponiveis() -> str:
     return ", ".join(PERFIS.keys())
+
+
+# ─── Perfis de Agentes Ofensivos ─────────────────────────────────────────────
+
+PERFIS_AGENTE = {
+    "recon_specialist": {
+        "descricao": "Especialista em reconhecimento passivo/ativo — mapeia superfície de ataque antes de qualquer ação invasiva",
+        "ferramentas_prioritarias": ["subfinder", "whatweb", "headers", "nmap"],
+        "instrucao_cot": (
+            "Antes de usar qualquer ferramenta, declare:\n"
+            "→ ESCOLHA: [ferramenta] porque [razão técnica vs alternativas]\n"
+            "→ PARÂMETROS: [parâmetros-chave] porque [justificativa]\n"
+            "→ OBJETIVO: O que espero mapear com este resultado"
+        ),
+        "restricoes": (
+            "Priorize técnicas passivas (subfinder, headers, whatweb) antes de ativas (nmap). "
+            "Varreduras ativas só após confirmar permissão de engajamento."
+        ),
+    },
+    "infiltration_specialist": {
+        "descricao": "Especialista em validação de vulnerabilidades — confirma achados e propõe vetores de exploração",
+        "ferramentas_prioritarias": ["nuclei", "nikto", "gobuster", "bypass_analyst"],
+        "instrucao_cot": (
+            "Antes de executar qualquer ferramenta ofensiva, avalie:\n"
+            "→ HIPÓTESE: Qual vulnerabilidade ou vetor estou validando?\n"
+            "→ IMPACTO: Qual o risco se confirmado (CVSS estimado)?\n"
+            "→ RISCO OPERACIONAL: Esta ação pode causar disrupção no alvo?"
+        ),
+        "restricoes": (
+            "Toda ação agressiva (nikto, nuclei com tags cve/default-login, gobuster wordlist big) "
+            "exige justificativa técnica explícita antes da execução."
+        ),
+    },
+    "reporting_auditor": {
+        "descricao": "Auditor de risco — consolida achados, quantifica impacto e produz relatório executivo",
+        "ferramentas_prioritarias": ["historico"],
+        "instrucao_cot": (
+            "Antes de emitir qualquer conclusão:\n"
+            "→ EVIDÊNCIA: Os dados coletados suportam esta afirmação?\n"
+            "→ SEVERIDADE: Qual CVSS e impacto de negócio real?\n"
+            "→ ACIONABILIDADE: A recomendação é implementável pelo time de dev/ops?"
+        ),
+        "restricoes": (
+            "Não execute ferramentas de scan — consolide apenas resultados já coletados. "
+            "Toda severidade deve ser justificada com base nos dados, não em suposições."
+        ),
+    },
+}
+
+
+def obter_perfil_agente(nome: str) -> dict:
+    """Retorna o perfil de agente ofensivo pelo nome."""
+    return PERFIS_AGENTE.get(nome.lower(), {})
+
+
+def perfis_agente_disponiveis() -> str:
+    return ", ".join(PERFIS_AGENTE.keys())

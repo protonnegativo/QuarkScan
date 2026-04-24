@@ -1,10 +1,12 @@
 import os
+import time
 import requests
 import urllib3
 from langchain_core.tools import tool
 from security import validar_alvo, guardrail_check
 from profiles import obter_perfil, perfis_disponiveis
 from session import ja_executado, registrar
+from terminal import truncar_inteligente
 import storage
 
 OWASP_HEADERS = [
@@ -19,12 +21,6 @@ OWASP_HEADERS = [
 ]
 
 _MAX_CHARS = 3000
-
-
-def _truncar(texto: str) -> str:
-    if len(texto) <= _MAX_CHARS:
-        return texto
-    return texto[:_MAX_CHARS] + f"\n... [saída truncada — {len(texto)} chars total]"
 
 
 @tool
@@ -79,7 +75,7 @@ def analisar_headers(
         cache = storage.resultado_recente(alvo_limpo, "headers", horas=12)
         if cache:
             registrar(alvo_limpo, "headers", protocolo, chave_porta, str(ignorar_ssl), perfil_navegador)
-            return f"[CACHE {cache['timestamp']}] Use forcar_novo=True para re-executar.\n\n{_truncar(cache['resultado'])}"
+            return f"[CACHE {cache['timestamp']}] Use forcar_novo=True para re-executar.\n\n{truncar_inteligente(cache['resultado'], _MAX_CHARS)}"
 
     registrar(alvo_limpo, "headers", protocolo, chave_porta, str(ignorar_ssl), perfil_navegador)
 
@@ -95,6 +91,7 @@ def analisar_headers(
     if porta:
         url += f":{porta}"
 
+    inicio = time.time()
     try:
         fn = requests.head if metodo == "HEAD" else requests.get
         response = fn(
@@ -104,6 +101,7 @@ def analisar_headers(
             headers=req_headers or None,
             allow_redirects=seguir_redirect,
         )
+        duracao_ms = int((time.time() - inicio) * 1000)
         headers = response.headers
         raw = "\n".join(f"{k}: {v}" for k, v in headers.items())
 
@@ -115,8 +113,26 @@ def analisar_headers(
             f"OWASP FALTANDO: {', '.join(faltantes) if faltantes else 'Nenhum ✅'}"
         )
         storage.salvar(alvo_limpo, "headers", saida, {"protocolo": protocolo, "porta": porta, "perfil": perfil_navegador})
+        storage.salvar_metrica("headers", alvo_limpo, response.status_code, duracao_ms, True)
         if os.environ.get("QUARKSCAN_RAW"):
             print(f"\n[RAW headers]\n{saida}\n[/RAW]\n")
-        return _truncar(saida)
+        return truncar_inteligente(saida, _MAX_CHARS)
+    except requests.exceptions.SSLError:
+        duracao_ms = int((time.time() - inicio) * 1000)
+        storage.salvar_metrica("headers", alvo_limpo, -1, duracao_ms, False)
+        return (
+            "Erro SSL: certificado inválido ou autoassinado.\n"
+            "Dica de correção: use ignorar_ssl=True para ignorar verificação de certificado."
+        )
+    except requests.exceptions.ConnectionError:
+        duracao_ms = int((time.time() - inicio) * 1000)
+        storage.salvar_metrica("headers", alvo_limpo, -1, duracao_ms, False)
+        return (
+            f"Erro de conexão com {url}.\n"
+            "Dica de correção: verifique se o alvo está acessível. "
+            "Tente protocolo='http' se o alvo não suporta HTTPS."
+        )
     except Exception as e:
+        duracao_ms = int((time.time() - inicio) * 1000)
+        storage.salvar_metrica("headers", alvo_limpo, -1, duracao_ms, False)
         return str(e)

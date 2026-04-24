@@ -3,15 +3,10 @@ import subprocess
 from langchain_core.tools import tool
 from security import FLAGS_PERMITIDAS, validar_args, validar_alvo, guardrail_check
 from session import ja_executado, registrar
+from terminal import executar_com_monitoramento, truncar_inteligente
 import storage
 
 _MAX_CHARS = 5000
-
-
-def _truncar(texto: str) -> str:
-    if len(texto) <= _MAX_CHARS:
-        return texto
-    return texto[:_MAX_CHARS] + f"\n... [saída truncada — {len(texto)} chars total]"
 
 
 @tool
@@ -45,7 +40,10 @@ def executar_nmap(alvo: str, argumentos: str, forcar_novo: bool = False) -> str:
 
     args_validados = validar_args(argumentos)
     if not args_validados:
-        return f"Erro: nenhum argumento válido. Flags permitidas: {', '.join(sorted(FLAGS_PERMITIDAS))}"
+        return (
+            f"Erro: nenhum argumento válido. Flags permitidas: {', '.join(sorted(FLAGS_PERMITIDAS))}\n"
+            "Dica de correção: use flags da lista acima. Exemplo: -sT -p 80,443"
+        )
 
     try:
         guardrail_check("nmap", alvo_limpo, " ".join(args_validados))
@@ -58,20 +56,30 @@ def executar_nmap(alvo: str, argumentos: str, forcar_novo: bool = False) -> str:
         cache = storage.resultado_recente(alvo_limpo, "nmap", horas=24)
         if cache:
             registrar(alvo_limpo, "nmap", argumentos)
-            return f"[CACHE {cache['timestamp']}] Use forcar_novo=True para re-executar.\n\n{_truncar(cache['resultado'])}"
+            return f"[CACHE {cache['timestamp']}] Use forcar_novo=True para re-executar.\n\n{truncar_inteligente(cache['resultado'], _MAX_CHARS)}"
 
     registrar(alvo_limpo, "nmap", argumentos)
     comando = ["nmap"] + args_validados + [alvo_limpo]
     print(f"[nmap] Executando: {' '.join(comando)}")
 
     try:
-        resultado = subprocess.run(comando, capture_output=True, text=True, timeout=300)
-        saida = resultado.stdout or resultado.stderr
+        res = executar_com_monitoramento(comando, timeout=300, ferramenta="nmap", alvo=alvo_limpo)
+        saida = res.saida_principal()
+        if not saida:
+            saida = "Nenhum resultado retornado pelo Nmap."
+        if not res.sucesso and not res.stdout.strip():
+            saida = res.erro_autocorrecao(
+                "verifique se os argumentos são compatíveis com a versão do nmap instalada. "
+                f"Flags suportadas: {', '.join(sorted(FLAGS_PERMITIDAS))}"
+            )
         storage.salvar(alvo_limpo, "nmap", saida, {"argumentos": argumentos})
+        storage.salvar_metrica("nmap", alvo_limpo, res.exit_code, res.duracao_ms, res.sucesso)
         if os.environ.get("QUARKSCAN_RAW"):
             print(f"\n[RAW nmap]\n{saida}\n[/RAW]\n")
-        return _truncar(saida)
+        return truncar_inteligente(saida, _MAX_CHARS)
     except subprocess.TimeoutExpired:
-        return "Erro: timeout (300s). Use --top-ports ou menos portas."
+        return "Erro: timeout (300s). Use --top-ports ou menos portas para reduzir escopo."
+    except FileNotFoundError:
+        return "Erro: nmap não encontrado. Verifique a instalação."
     except Exception as e:
         return str(e)

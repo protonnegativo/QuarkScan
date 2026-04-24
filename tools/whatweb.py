@@ -4,15 +4,10 @@ from langchain_core.tools import tool
 from security import validar_alvo, guardrail_check
 from profiles import obter_perfil, perfis_disponiveis
 from session import ja_executado, registrar
+from terminal import executar_com_monitoramento, truncar_inteligente
 import storage
 
 _MAX_CHARS = 3000
-
-
-def _truncar(texto: str) -> str:
-    if len(texto) <= _MAX_CHARS:
-        return texto
-    return texto[:_MAX_CHARS] + f"\n... [saída truncada — {len(texto)} chars total]"
 
 
 @tool
@@ -66,7 +61,7 @@ def executar_whatweb(
         cache = storage.resultado_recente(alvo_limpo, "whatweb", horas=48)
         if cache:
             registrar(alvo_limpo, "whatweb", str(nivel), perfil_navegador)
-            return f"[CACHE {cache['timestamp']}] Use forcar_novo=True para re-executar.\n\n{_truncar(cache['resultado'])}"
+            return f"[CACHE {cache['timestamp']}] Use forcar_novo=True para re-executar.\n\n{truncar_inteligente(cache['resultado'], _MAX_CHARS)}"
 
     registrar(alvo_limpo, "whatweb", str(nivel), perfil_navegador)
 
@@ -90,16 +85,23 @@ def executar_whatweb(
     print(f"[whatweb] Executando: {' '.join(comando)}")
 
     try:
-        resultado = subprocess.run(comando, capture_output=True, text=True, timeout=timeout + 30)
-        saida = resultado.stdout.strip() or "WhatWeb não detectou tecnologias."
+        res = executar_com_monitoramento(comando, timeout=timeout + 30, ferramenta="whatweb", alvo=alvo_limpo)
+        saida = res.stdout.strip()
+        if not saida and not res.sucesso:
+            saida = res.erro_autocorrecao(
+                "tente agressividade=1 com seguir_redirect='http_only' para alvos que redirecionam para HTTP"
+            )
+        elif not saida:
+            saida = "WhatWeb não detectou tecnologias."
         storage.salvar(alvo_limpo, "whatweb", saida, {
             "agressividade": nivel, "perfil": perfil_navegador,
         })
+        storage.salvar_metrica("whatweb", alvo_limpo, res.exit_code, res.duracao_ms, res.sucesso)
         if os.environ.get("QUARKSCAN_RAW"):
             print(f"\n[RAW whatweb]\n{saida}\n[/RAW]\n")
-        return _truncar(saida)
+        return truncar_inteligente(saida, _MAX_CHARS)
     except subprocess.TimeoutExpired:
-        return f"Erro: timeout ({timeout + 30}s)."
+        return f"Erro: timeout ({timeout + 30}s). Reduza o timeout ou use agressividade=1."
     except FileNotFoundError:
         return "Erro: whatweb não encontrado."
     except Exception as e:
