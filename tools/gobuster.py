@@ -2,7 +2,7 @@ import os
 import re
 import subprocess
 from langchain_core.tools import tool
-from security import validar_alvo
+from security import validar_alvo, guardrail_check
 from profiles import obter_perfil, perfis_disponiveis
 from session import ja_executado, registrar
 import storage
@@ -83,6 +83,11 @@ def executar_gobuster(
     perfil = obter_perfil(perfil_navegador)
     if perfil_navegador and not perfil:
         return f"Perfil inválido. Disponíveis: {perfis_disponiveis()}"
+
+    try:
+        guardrail_check("gobuster", alvo_limpo, f"dir -u {protocolo}://{alvo_limpo} -w {wordlist} -t {threads}")
+    except PermissionError as e:
+        return str(e)
 
     if not forcar_novo:
         if ja_executado(alvo_limpo, "gobuster", wordlist, extensoes, perfil_navegador):

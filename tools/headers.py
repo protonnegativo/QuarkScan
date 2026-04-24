@@ -2,7 +2,7 @@ import os
 import requests
 import urllib3
 from langchain_core.tools import tool
-from security import validar_alvo
+from security import validar_alvo, guardrail_check
 from profiles import obter_perfil, perfis_disponiveis
 from session import ja_executado, registrar
 import storage
@@ -67,6 +67,12 @@ def analisar_headers(
         return f"Perfil inválido. Disponíveis: {perfis_disponiveis()}"
 
     chave_porta = str(porta) if porta else ""
+
+    try:
+        guardrail_check("headers", alvo_limpo, f"{protocolo}://{alvo_limpo}")
+    except PermissionError as e:
+        return str(e)
+
     if not forcar_novo:
         if ja_executado(alvo_limpo, "headers", protocolo, chave_porta, str(ignorar_ssl), perfil_navegador):
             return "Análise de headers já realizada para este alvo nesta sessão."

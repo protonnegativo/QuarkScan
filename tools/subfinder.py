@@ -1,7 +1,7 @@
 import os
 import subprocess
 from langchain_core.tools import tool
-from security import validar_alvo
+from security import validar_alvo, guardrail_check
 from session import ja_executado, registrar
 import storage
 
@@ -69,6 +69,11 @@ def executar_subfinder(
         return "Erro: alvo inválido. Use um domínio válido."
 
     threads = max(1, min(50, int(threads)))
+
+    try:
+        guardrail_check("subfinder", alvo_limpo, f"-d {alvo_limpo} -t {threads}")
+    except PermissionError as e:
+        return str(e)
 
     if not forcar_novo:
         if ja_executado(alvo_limpo, "subfinder", str(recursivo), str(todas_fontes)):

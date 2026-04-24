@@ -2,7 +2,7 @@ import os
 import re
 import subprocess
 from langchain_core.tools import tool
-from security import validar_alvo
+from security import validar_alvo, guardrail_check
 from session import ja_executado, registrar
 import storage
 
@@ -82,6 +82,11 @@ def executar_nuclei(
 
     if proxy and not _PROXY_RE.match(proxy):
         return "Erro: proxy inválido. Use http://host:porta ou https://host:porta."
+
+    try:
+        guardrail_check("nuclei", alvo_limpo, f"-u {alvo_limpo} -tags {tags_validadas} -severity {severidades_validadas}")
+    except PermissionError as e:
+        return str(e)
 
     chave_extra = f"{tags_validadas}{severidades_validadas}"
     if not forcar_novo:

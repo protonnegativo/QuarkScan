@@ -10,8 +10,12 @@ if not os.environ.get("GEMINI_API_KEY"):
 
 from agents.supervisor import supervisor
 from pipeline import detectar_alvo_pipeline, executar_pipeline
-from security import sanitizar_input
+from pipeline_graph import executar_pipeline_graph
+from security import inicializar_guardrails, sanitizar_input
+from llm import criar_llm
 from terminal import C, formatar_para_terminal
+
+inicializar_guardrails(llm=criar_llm("security"))
 
 config = {"configurable": {"thread_id": str(uuid.uuid4())}}
 

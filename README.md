@@ -4,8 +4,8 @@
 Interface conversacional em português — você descreve o objetivo, o agente decide as ferramentas, executa e consolida os resultados.
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
-![LangGraph](https://img.shields.io/badge/LangGraph-ReAct-orange)
-![AI](https://img.shields.io/badge/AI-Multi--Provider-blueviolet)
+![LangGraph](https://img.shields.io/badge/LangGraph-StateGraph-orange)
+![Gemini](https://img.shields.io/badge/Gemini-2.5%20Flash-4285F4?logo=google&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Ubuntu%2022.04-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
@@ -13,29 +13,35 @@ Interface conversacional em português — você descreve o objetivo, o agente d
 
 ## Visão Geral
 
-QuarkScan é uma plataforma multi-agente onde um **Supervisor LLM** interpreta sua intenção e roteia para agentes especializados, cada um com seu próprio modelo e conjunto de ferramentas. Os resultados são persistidos em SQLite para consulta e comparação histórica.
+QuarkScan é uma plataforma multi-agente onde um **Supervisor LLM** interpreta sua intenção e roteia para agentes especializados, cada um com seu próprio modelo e conjunto de ferramentas. Os resultados são persistidos em SQLite com memória de longo prazo entre engajamentos.
 
 ```
-Você: "scan completo em exemplo.com"
+Você: "pipeline em exemplo.com"
               │
               ▼
 ┌─────────────────────────────────────────┐
-│             Supervisor LLM              │
-│    Gemini API · LangGraph · Memory      │
+│         Supervisor LLM (LangGraph)      │
+│    Gemini API · StateGraph · Memory     │
 └─────────────────────────────────────────┘
               │
-              ├──▶ agente_nmap       →  Nmap
-              ├──▶ agente_headers    →  requests
-              ├──▶ agente_gobuster   →  Gobuster + SecLists
-              ├──▶ agente_nikto      →  Nikto
-              ├──▶ agente_nuclei     →  Nuclei (templates)
-              ├──▶ agente_whatweb    →  WhatWeb
-              ├──▶ agente_subfinder  →  Subfinder
-              └──▶ agente_historico  →  SQLite
+              ├──▶ agente_subfinder   →  Subfinder  ──▶ fallback DNS brute-force
+              ├──▶ agente_nmap        →  Nmap
+              ├──▶ agente_headers     →  requests
+              ├──▶ agente_gobuster    →  Gobuster + SecLists
+              ├──▶ agente_nikto       →  Nikto
+              ├──▶ agente_nuclei      →  Nuclei (templates)
+              ├──▶ agente_whatweb     →  WhatWeb
+              ├──▶ agente_historico   →  SQLite
+              └──▶ bypass_analyst     →  Análise de evasão WAF
+                          │
+                          ▼
+              ┌───────────────────────┐
+              │  ValidationGuardrails │  ← Regex + LLM semântico + rate limit
+              └───────────────────────┘
                           │
                           ▼
                   ┌───────────────┐
-                  │  SQLite (DB)  │  ← histórico · diff entre scans
+                  │  SQLite (DB)  │  ← resultados · vulns · memória de subdomínios
                   └───────────────┘
 ```
 
@@ -43,16 +49,18 @@ Você: "scan completo em exemplo.com"
 
 ## Funcionalidades
 
-- **8 agentes especializados** — cada um com LLM próprio e domínio específico
+- **9 agentes especializados** — cada um com LLM próprio e domínio específico
 - **Supervisor inteligente** — roteia, evita loops, não repete scans já realizados
-- **Pipeline autônomo** — modo sequencial `recon passivo → ativo → enumeração → análise` com confirmação antes de fases destrutivas
-- **Modelo configurável** — troca o modelo de qualquer agente via env var sem tocar no código; cada agente pode usar um modelo diferente
-- **Cache de resultados** — consulta o banco antes de cada scan; evita re-execuções desnecessárias entre sessões
-- **Proteção anti-loop** — limite de recursão por agente; erros de quota/API tratados sem crash
+- **Pipeline LangGraph (StateGraph)** — grafo de estado com fallback automático: se subfinder retornar zero resultados, aciona DNS brute-force automaticamente antes de prosseguir
+- **Fases destrutivas com gate de confirmação** — recon passivo e ativo sem confirmação; enumeração e vuln analysis exigem aprovação interativa
+- **Validation Guardrails** — camada universal de segurança em todos os tools: regex (9 padrões de injeção) + análise semântica LLM + rate limiting por tool/alvo
+- **Memória de longo prazo** — vulnerabilidades descobertas e subdomínios scaneados persistem entre sessões; evita rescans redundantes e economiza API
+- **Bypass Analyst** — agente Red Team que revisa payloads e propõe variações para evadir assinaturas de WAF (ModSecurity CRS, Cloudflare, AWS WAF, Imperva, F5)
+- **Modelo configurável** — troca o modelo de qualquer agente via env var; cada agente pode usar um modelo diferente
+- **Cache de resultados** — TTL por ferramenta (12h–72h); evita re-execuções desnecessárias
 - **Evasão de WAF/CDN** — perfis de navegador reais (Chrome, Firefox, Safari, Googlebot), delays configuráveis, técnicas de evasão IDS
 - **Histórico persistente** — compara dois scans do mesmo alvo e destaca o que mudou
 - **Enumeração de subdomínios** — filtra automaticamente os prioritários (api, admin, jenkins, staging...)
-- **Parâmetros completos** — todos os tools expõem os flags relevantes das ferramentas oficiais
 - **Segurança de execução** — allowlist de flags Nmap, validação de alvos, scripts NSE restritos
 - **Deduplicação por sessão** — evita chamadas duplicadas via hash SHA-256 dos argumentos
 - **Container Docker** — ambiente completo e isolado com SecLists e templates Nuclei incluídos
@@ -63,14 +71,15 @@ Você: "scan completo em exemplo.com"
 
 | Agente | Ferramenta | Função |
 |---|---|---|
+| `agente_subfinder` | Subfinder | Subdomínios via DNS passivo e certificate transparency |
 | `agente_nmap` | Nmap | Portas, serviços, fingerprint de OS, scripts NSE |
 | `agente_headers` | requests | Headers HTTP, cookies, conformidade OWASP |
 | `agente_gobuster` | Gobuster + SecLists | Diretórios, arquivos e paths ocultos |
 | `agente_nikto` | Nikto | CVEs, misconfigurações de servidor, versões vulneráveis |
 | `agente_nuclei` | Nuclei | CVEs indexados, exposições, defaults de login, templates ProjectDiscovery |
 | `agente_whatweb` | WhatWeb | CMS, frameworks, bibliotecas, stack completo |
-| `agente_subfinder` | Subfinder | Subdomínios via DNS passivo e certificate transparency |
 | `agente_historico` | SQLite | Histórico de scans, comparação entre execuções |
+| `bypass_analyst` | LLM (Red Team) | Análise de payloads e geração de variações de bypass WAF |
 
 ---
 
@@ -107,6 +116,7 @@ GEMINI_API_KEY=sua_chave_aqui
 # Override por agente — útil para usar Pro no supervisor e Flash nos demais
 # GEMINI_MODEL_SUPERVISOR=gemini-2.5-pro
 # GEMINI_MODEL_NMAP=gemini-2.5-flash
+# GEMINI_MODEL_BYPASS_ANALYST=gemini-2.5-flash
 
 # Exibe o output bruto das ferramentas antes do LLM processar (opcional)
 # QUARKSCAN_RAW=1
@@ -134,6 +144,7 @@ vulnerabilidades nas portas abertas de exemplo.com
 nuclei em exemplo.com focando em CVEs críticos
 mostra o histórico de scans de exemplo.com
 compara os dois últimos nmap de exemplo.com
+analisa o bypass deste payload XSS: <script>alert(1)</script>
 ```
 
 ### Cache de resultados
@@ -152,13 +163,13 @@ Por padrão, o output das ferramentas passa pelo LLM antes de chegar ao terminal
 QUARKSCAN_RAW=1 ./start_agent.sh
 ```
 
-Com a flag ativa, o terminal exibe o output bruto entre marcadores `[RAW ferramenta]` / `[/RAW]` logo após a execução do comando, seguido do output formatado pelo LLM normalmente. Útil para auditoria, debug e verificação de que os resultados estão sendo interpretados corretamente.
+Com a flag ativa, o terminal exibe o output bruto entre marcadores `[RAW ferramenta]` / `[/RAW]` logo após a execução do comando, seguido do output formatado pelo LLM normalmente.
 
 ---
 
-### Pipeline autônomo
+### Pipeline autônomo (LangGraph StateGraph)
 
-Execute todas as fases de reconhecimento em sequência com um único comando. O pipeline pede confirmação antes de operações agressivas e gera um relatório consolidado ao final.
+Execute todas as fases de reconhecimento em sequência com um único comando. O pipeline é construído como um **grafo de estado** com fallback automático e checkpointing.
 
 ```
 pipeline em exemplo.com
@@ -168,13 +179,17 @@ pentest completo em exemplo.com
 
 Fases executadas em ordem:
 
-| Fase | Agentes | Confirmação |
-|---|---|---|
-| Reconhecimento Passivo | subfinder | não |
-| Reconhecimento Ativo | nmap, whatweb, headers | não |
-| Enumeração | gobuster, nikto | **sim** |
-| Análise de Vulnerabilidades | nuclei | **sim** |
-| Relatório consolidado | supervisor (sumário via LLM) | — |
+| Fase | Agentes | Confirmação | Fallback |
+|---|---|---|---|
+| Reconhecimento Passivo | subfinder | não | DNS brute-force se vazio |
+| Reconhecimento Ativo | nmap, whatweb, headers | não | — |
+| Enumeração | gobuster, nikto | **sim** | — |
+| Análise de Vulnerabilidades | nuclei | **sim** | — |
+| Relatório consolidado | supervisor (sumário via LLM) | — | — |
+
+**Fallback automático:** se o subfinder não encontrar subdomínios, o pipeline não para — aciona automaticamente um DNS brute-force antes de prosseguir para a Fase 2.
+
+Para usar o pipeline baseado em StateGraph (recomendado), edite `agente.py` e substitua `executar_pipeline` por `executar_pipeline_graph`.
 
 ### Evasão de WAF
 
@@ -186,24 +201,57 @@ gobuster em exemplo.com http com delay de 1s e perfil firefox
 nuclei em exemplo.com usando proxy http://127.0.0.1:8080
 ```
 
+### Bypass Analyst
+
+O agente `bypass_analyst` analisa payloads de exploit gerados durante o pentest e propõe variações para evadir assinaturas de WAF conhecidas:
+
+```
+analisa o bypass deste payload SQLi: ' OR 1=1--
+revisa o payload XSS para bypass de cloudflare: <script>alert(document.cookie)</script>
+bypass analyst no payload de SSTI: {{7*7}}
+```
+
+O agente retorna variações ordenadas por probabilidade de evasão, indicando quais WAFs cada variação consegue bypassar. Os resultados são cacheados por 7 dias para evitar chamadas desnecessárias ao LLM.
+
+Tipos suportados: `sqli`, `xss`, `lfi`, `rce`, `ssti`, `xxe`, `ssrf`
+
+---
+
+## Segurança e Controles
+
+| Controle | Detalhe |
+|---|---|
+| **Validation Guardrails** | Camada universal em todos os tools: 9 padrões regex (metacaracteres, path traversal, backtick, cmd substitution, null bytes, etc.) + análise semântica LLM + rate limiting 5 calls/60s por tool/alvo |
+| Flags Nmap | Allowlist explícita — inclui `-sS/sT/sU/sV/sN/sF/sX`, `--top-ports`, `--min-rate`, `-PE/-PS/-PA` e outros |
+| Scripts NSE | Restritos a: `vuln`, `default`, `safe`, `discovery`, `http-headers`, `ssl-enum-ciphers`, `ssl-cert`, `banner`, `http-methods`, `ftp-anon`, `ssh-hostkey`, `smb-vuln-ms17-010` e outros |
+| Alvos | Validados por regex — apenas domínios e IPs válidos aceitos |
+| Extensões Gobuster | Validadas por regex antes do uso |
+| Cache de resultados | TTL por ferramenta (12h–72h) — evita re-scans automáticos |
+| Memória de longo prazo | Vulnerabilidades indexadas por `(alvo, subdomínio, identificador)` — deduplicação automática entre sessões |
+| Deduplicação | Hash SHA-256 dos argumentos por sessão |
+| Anti-loop | Limite de 10 iterações por agente especialista |
+| Isolamento | Execução dentro de container Docker |
+
 ---
 
 ## Estrutura do Projeto
 
 ```
 QuarkScan/
-├── agente.py          # Entry point — loop de conversa
-├── pipeline.py        # Pipeline autônomo de fases com confirmação
-├── llm.py             # Resolução de modelo via env var (GEMINI_MODEL_*)
-├── prompts.py         # System prompts de todos os agentes
-├── security.py        # Allowlist de flags Nmap e validação de alvos
-├── storage.py         # Persistência SQLite + cache de resultados
-├── session.py         # Deduplicação de chamadas por sessão (SHA-256)
-├── profiles.py        # Perfis de navegador para evasão WAF
-├── terminal.py        # Formatação colorida do output
+├── agente.py            # Entry point — loop de conversa + inicialização de guardrails
+├── pipeline.py          # Pipeline sequencial legado (fases com confirmação)
+├── pipeline_graph.py    # Pipeline LangGraph StateGraph com fallback e checkpointing
+├── llm.py               # Resolução de modelo via env var (GEMINI_MODEL_*)
+├── prompts.py           # System prompts de todos os agentes
+├── security.py          # Allowlist Nmap · validação de alvos · ValidationGuardrails
+├── storage.py           # SQLite: resultados · cache TTL · memória de vulns/subdomínios
+├── session.py           # Deduplicação de chamadas por sessão (SHA-256)
+├── profiles.py          # Perfis de navegador para evasão WAF
+├── terminal.py          # Formatação colorida do output
 ├── agents/
-│   ├── base.py        # invocar() com recursion_limit e tratamento de erros
-│   ├── supervisor.py  # Orquestrador LangGraph com MemorySaver
+│   ├── base.py          # invocar() com recursion_limit e tratamento de erros
+│   ├── supervisor.py    # Orquestrador LangGraph com MemorySaver
+│   ├── bypass_analyst.py  # Agente Red Team para evasão de WAF
 │   ├── nmap.py
 │   ├── headers.py
 │   ├── gobuster.py
@@ -212,7 +260,8 @@ QuarkScan/
 │   ├── whatweb.py
 │   ├── subfinder.py
 │   └── historico.py
-├── tools/             # Wrappers que executam os binários
+├── tools/               # Wrappers com guardrail_check() antes do subprocess
+│   ├── bypass.py        # Análise de bypass WAF com cache 7 dias
 │   ├── nmap.py
 │   ├── headers.py
 │   ├── gobuster.py
@@ -225,22 +274,6 @@ QuarkScan/
 ├── start_agent.sh
 └── requirements.txt
 ```
-
----
-
-## Segurança e Controles
-
-| Controle | Detalhe |
-|---|---|
-| Flags Nmap | Allowlist explícita — inclui `-sS/sT/sU/sV/sN/sF/sX`, `--top-ports`, `--min-rate`, `-PE/-PS/-PA` e outros |
-| Scripts NSE | Restritos a: `vuln`, `default`, `safe`, `discovery`, `http-headers`, `http-title`, `ssl-enum-ciphers`, `ssl-cert`, `banner`, `http-methods`, `ftp-anon`, `ssh-hostkey`, `smb-vuln-ms17-010` e outros |
-| Alvos | Validados por regex — apenas domínios e IPs válidos aceitos |
-| Extensões Gobuster | Validadas por regex antes do uso |
-| Status codes / comprimento | Whitelist e blacklist de respostas configuráveis |
-| Cache de resultados | TTL por ferramenta (12h–72h) — evita re-scans automáticos |
-| Deduplicação | Hash SHA-256 dos argumentos por sessão |
-| Anti-loop | Limite de 10 iterações por agente especialista |
-| Isolamento | Execução dentro de container Docker |
 
 ---
 
@@ -321,9 +354,12 @@ As seções seguem as fases de um engajamento real. Itens dentro de cada fase es
 | Item | Descrição |
 |---|---|
 | ~~**Pipeline de fases**~~ | ✓ Implementado — `pipeline em <alvo>` |
+| ~~**Validation Guardrails**~~ | ✓ Implementado — Regex + LLM semântico + rate limiting em todos os tools |
+| ~~**Memória de alvo persistente**~~ | ✓ Implementado — tabelas `vulnerabilidades` + `subdominios_memoria` com deduplicação automática |
+| ~~**Fallback de recon**~~ | ✓ Implementado — subfinder vazio → DNS brute-force automático no StateGraph |
+| ~~**Bypass Analyst**~~ | ✓ Implementado — agente Red Team para evasão de assinaturas WAF |
 | **Suporte a múltiplos provedores de IA** | Abstrair o LLM para suportar OpenAI (GPT-4o), Anthropic (Claude), Ollama (local) e Groq além do Gemini. Cada agente poderia usar um provedor diferente via env var — ex: `NMAP_LLM_PROVIDER=ollama` para rodar offline |
 | **Modo agressivo / lightweight** | Flag no chat para controlar intensidade (threads, timeout, técnicas) sem editar código |
-| **Memória de alvo persistente** | Knowledge graph acumulativo entre engajamentos: IP → ASN, subdomínios vistos, serviços historicamente vulneráveis. Diferente do histórico atual, que armazena outputs brutos |
 | **Replay de sessão** | Recarregar sessão anterior pelo ID e continuar de onde parou, sem repetir o que já foi scaneado |
 | **Modo MCP server** | Expor o QuarkScan como MCP server para integração em pipelines maiores via outros agentes |
 

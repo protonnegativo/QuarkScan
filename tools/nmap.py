@@ -1,7 +1,7 @@
 import os
 import subprocess
 from langchain_core.tools import tool
-from security import FLAGS_PERMITIDAS, validar_args, validar_alvo
+from security import FLAGS_PERMITIDAS, validar_args, validar_alvo, guardrail_check
 from session import ja_executado, registrar
 import storage
 
@@ -46,6 +46,11 @@ def executar_nmap(alvo: str, argumentos: str, forcar_novo: bool = False) -> str:
     args_validados = validar_args(argumentos)
     if not args_validados:
         return f"Erro: nenhum argumento válido. Flags permitidas: {', '.join(sorted(FLAGS_PERMITIDAS))}"
+
+    try:
+        guardrail_check("nmap", alvo_limpo, " ".join(args_validados))
+    except PermissionError as e:
+        return str(e)
 
     if not forcar_novo:
         if ja_executado(alvo_limpo, "nmap", argumentos):

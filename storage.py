@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+from typing import Optional
 
 DB_PATH = os.environ.get("DB_PATH", "data/resultados.db")
 
@@ -27,6 +28,34 @@ def _init():
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_alvo ON resultados(alvo, ferramenta)"
         )
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS vulnerabilidades (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                alvo_raiz     TEXT NOT NULL,
+                subdominio    TEXT NOT NULL DEFAULT '',
+                tipo          TEXT NOT NULL,
+                identificador TEXT NOT NULL,
+                severidade    TEXT DEFAULT 'unknown',
+                detalhes      TEXT,
+                status        TEXT DEFAULT 'encontrado',
+                primeira_vez  TEXT DEFAULT (datetime('now', 'localtime')),
+                ultima_vez    TEXT DEFAULT (datetime('now', 'localtime'))
+            )
+        """)
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_vuln_dedup
+            ON vulnerabilidades(alvo_raiz, subdominio, identificador)
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS subdominios_memoria (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                alvo_raiz   TEXT NOT NULL,
+                subdominio  TEXT NOT NULL,
+                ferramentas TEXT DEFAULT '[]',
+                ultimo_scan TEXT DEFAULT (datetime('now', 'localtime')),
+                UNIQUE(alvo_raiz, subdominio)
+            )
+        """)
 
 
 _init()
@@ -88,3 +117,111 @@ def ultimos_dois(alvo: str, ferramenta: str) -> tuple:
         registros[0] if len(registros) > 0 else None,
         registros[1] if len(registros) > 1 else None,
     )
+
+
+# ─── Memória de Longo Prazo ───────────────────────────────────────────────────
+
+def registrar_vuln(
+    alvo_raiz: str,
+    subdominio: str,
+    tipo: str,
+    identificador: str,
+    severidade: str = "unknown",
+    detalhes: dict = None,
+) -> bool:
+    """Registra vulnerabilidade. Retorna True se nova, False se já conhecida."""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM vulnerabilidades WHERE alvo_raiz=? AND subdominio=? AND identificador=?",
+            (alvo_raiz.lower(), subdominio.lower(), identificador),
+        ).fetchone()
+        if row:
+            conn.execute(
+                "UPDATE vulnerabilidades SET ultima_vez=datetime('now','localtime'), severidade=? WHERE id=?",
+                (severidade, row["id"]),
+            )
+            return False
+        conn.execute(
+            "INSERT INTO vulnerabilidades "
+            "(alvo_raiz, subdominio, tipo, identificador, severidade, detalhes) "
+            "VALUES (?,?,?,?,?,?)",
+            (
+                alvo_raiz.lower(), subdominio.lower(), tipo, identificador,
+                severidade, json.dumps(detalhes) if detalhes else None,
+            ),
+        )
+        return True
+
+
+def vulns_conhecidas(alvo_raiz: str, subdominio: str = None) -> list[dict]:
+    """Retorna vulnerabilidades já registradas para evitar rescan redundante."""
+    with _conn() as conn:
+        if subdominio:
+            rows = conn.execute(
+                "SELECT * FROM vulnerabilidades WHERE alvo_raiz=? AND subdominio=? "
+                "AND status != 'falso-positivo' ORDER BY severidade DESC",
+                (alvo_raiz.lower(), subdominio.lower()),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM vulnerabilidades WHERE alvo_raiz=? "
+                "AND status != 'falso-positivo' ORDER BY subdominio, severidade DESC",
+                (alvo_raiz.lower(),),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def subdominio_precisa_scan(
+    alvo_raiz: str,
+    subdominio: str,
+    ferramenta: str,
+    horas: int = 168,
+) -> bool:
+    """True se o subdomínio ainda não foi scaneado com essa ferramenta na janela de horas."""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT ferramentas, ultimo_scan FROM subdominios_memoria "
+            "WHERE alvo_raiz=? AND subdominio=? "
+            "AND datetime(ultimo_scan) >= datetime('now','localtime',?)",
+            (alvo_raiz.lower(), subdominio.lower(), f"-{horas} hours"),
+        ).fetchone()
+        if not row:
+            return True
+        ferramentas_feitas = json.loads(row["ferramentas"] or "[]")
+        return ferramenta not in ferramentas_feitas
+
+
+def marcar_subdominio_scaneado(alvo_raiz: str, subdominio: str, ferramenta: str) -> None:
+    """Acumula ferramenta na lista do subdomínio, atualizando o timestamp."""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT ferramentas FROM subdominios_memoria WHERE alvo_raiz=? AND subdominio=?",
+            (alvo_raiz.lower(), subdominio.lower()),
+        ).fetchone()
+        ferramentas = json.loads(row["ferramentas"]) if row else []
+        if ferramenta not in ferramentas:
+            ferramentas.append(ferramenta)
+        conn.execute(
+            "INSERT INTO subdominios_memoria (alvo_raiz, subdominio, ferramentas) VALUES (?,?,?) "
+            "ON CONFLICT(alvo_raiz, subdominio) DO UPDATE SET "
+            "ferramentas=excluded.ferramentas, ultimo_scan=datetime('now','localtime')",
+            (alvo_raiz.lower(), subdominio.lower(), json.dumps(ferramentas)),
+        )
+
+
+def resumo_memoria(alvo_raiz: str) -> dict:
+    """Resumo da memória acumulada sobre o alvo para injetar no contexto do LLM."""
+    with _conn() as conn:
+        sev_rows = conn.execute(
+            "SELECT severidade, COUNT(*) AS n FROM vulnerabilidades "
+            "WHERE alvo_raiz=? AND status != 'falso-positivo' GROUP BY severidade",
+            (alvo_raiz.lower(),),
+        ).fetchall()
+        sub_count = conn.execute(
+            "SELECT COUNT(*) AS n FROM subdominios_memoria WHERE alvo_raiz=?",
+            (alvo_raiz.lower(),),
+        ).fetchone()
+    return {
+        "subdomains_scanned": sub_count["n"] if sub_count else 0,
+        "vulns_by_severity": {r["severidade"]: r["n"] for r in sev_rows},
+    }

@@ -1,7 +1,7 @@
 import os
 import subprocess
 from langchain_core.tools import tool
-from security import validar_alvo
+from security import validar_alvo, guardrail_check
 from profiles import obter_perfil, perfis_disponiveis
 from session import ja_executado, registrar
 import storage
@@ -54,6 +54,11 @@ def executar_whatweb(
     perfil = obter_perfil(perfil_navegador)
     if perfil_navegador and not perfil:
         return f"Perfil inválido. Disponíveis: {perfis_disponiveis()}"
+
+    try:
+        guardrail_check("whatweb", alvo_limpo, f"-a{nivel} https://{alvo_limpo}")
+    except PermissionError as e:
+        return str(e)
 
     if not forcar_novo:
         if ja_executado(alvo_limpo, "whatweb", str(nivel), perfil_navegador):

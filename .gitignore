@@ -3,19 +3,39 @@
 
 # Banco de dados local
 data/
+*.db
+*.db-shm
+*.db-wal
 
 # Cache Python
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyd
+.Python
 
 # Ambientes virtuais
 .venv/
 venv/
 env/
+.python-version
 
 # IDEs
 .idea/
 .vscode/
 *.swp
 *.swo
+*.orig
+
+# Logs e debug
+*.log
+quarkscan_*.log
+
+# macOS / Linux
+.DS_Store
+Thumbs.db
+
+# Outputs de scan temporários
+*.xml
+*.nmap
+*.gnmap
