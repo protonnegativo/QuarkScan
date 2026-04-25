@@ -285,6 +285,84 @@ QuarkScan/
 
 ---
 
+## Problemas Conhecidos e Melhorias Planejadas
+
+### Problemas Identificados
+
+#### 1. **Alucinações da IA**
+A IA frequentemente gera respostas que não correspondem ao output real das ferramentas. Atualmente, o banco de dados salva a resposta processada pela IA (output bruto + análise), o que dificulta:
+- Auditoria do que a ferramenta realmente encontrou vs. o que a IA interpretou
+- Confiabilidade dos resultados para stakeholders não-técnicos
+- Debug quando um resultado parece suspeito
+
+**Impacto:** Baixa confiança nos resultados quando há discrepâncias entre o output bruto e a interpretação da IA.
+
+#### 2. **Repetição de Scans Idênticos**
+Mesmo com verificação prévia no banco, usuários frequentemente executam múltiplos scans idênticos no mesmo alvo porque:
+- Não há visão clara do histórico de execuções
+- Falta feedback visual sobre o que já foi scaneado
+- Interface conversacional não oferece contexto de scan anterior
+
+**Impacto:** Gasto desnecessário de tokens, tempo de execução duplicado, ausência de visão consolidada do progresso.
+
+### Solução Proposta: Interface Web Interativa (Fase 6)
+
+Para resolver ambos os problemas, implementaremos uma **interface web HTML** com os seguintes recursos:
+
+#### **Dashboard de Projetos**
+- Organização de alvos por **projeto** (ex: "Fase 1 - Recon", "Pentest ClienteX", "CTF 2026")
+- Visão clara de quais scans já foram executados em cada alvo
+- Histórico persistente com timestamps e parâmetros usados
+
+#### **Painel de Execução**
+- Campo para inserir **alvo** (domínio ou IP)
+- **Seleção granular de scans** — executar todos ou apenas os desejados:
+  - [ ] Nmap
+  - [ ] WhatWeb
+  - [ ] Subfinder
+  - [ ] Gobuster
+  - [ ] Nikto
+  - [ ] Nuclei
+  - [ ] Headers
+  - [ ] Histórico
+- Botão para **iniciar scan** com progress bar em tempo real
+
+#### **Separação Output Bruto × Análise da IA**
+- **Aba 1: Output Bruto** — texto exato das ferramentas, sem processamento (salvo no banco sem alteração)
+- **Aba 2: Análise da IA** — interpretação e consolidação (opcional na execução, pode ser solicitado depois)
+- Permite **re-análise sob demanda** — click em "Analisar este output" para rodar LLM em resultado antigo, economizando tokens ao evitar re-scan
+
+#### **Economização de Tokens**
+- Checkbox "Salvar output bruto sem análise imediata" para scans exploratórios
+- Depois selecionar múltiplos outputs e clicar "Analisar tudo com IA" para uma análise consolidada e eficiente
+- Evita LLM por output, roda uma única análise batch
+
+#### **Visão Web**
+- **Facilita o dia-a-dia** — quem usa a ferramenta vê de forma clara e visual o que foi feito
+- **Não-técnicos conseguem entender** — relatório estruturado sem verbosidade de logs
+- **Facilita tomada de decisão** — "preciso refazer este nmap?" fica óbvio pelos resultados anteriores
+
+#### **Organização por Projeto**
+- Seletor dropdown ou tabs para trocar entre projetos
+- Exportar relatórios por projeto em Markdown/HTML
+- Comparação entre engajamentos do mesmo alvo em diferentes períodos
+
+### Benefícios
+
+| Problema | Solução |
+|---|---|
+| Alucinações da IA | Separar output bruto (confiável) de análise (inteligente) |
+| Repetição de scans | Dashboard visual mostra histórico e evita duplicação |
+| Falta de confiança | Auditoria fácil: ver exatamente o que cada ferramenta retornou |
+| Desperdício de tokens | Re-análise batch e opcional do output |
+| Difícil de comunicar resultados | Relatórios web exportáveis e estruturados por projeto |
+
+### Status: Roadmap (Fase 6 — Web UI)
+
+Esta melhoria está planejada para ser implementada após a consolidação do pipeline autônomo (Fase 5). A mudança é **não-breaking** — a interface web será uma camada adicional, e o modo conversacional continuará funcionando.
+
+---
+
 ## To Do — Roadmap para Pentest Autônomo
 
 As seções seguem as fases de um engajamento real. Itens dentro de cada fase estão ordenados pela ordem natural de execução.
