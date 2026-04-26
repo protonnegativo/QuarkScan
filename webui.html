@@ -87,6 +87,8 @@
 
     /* Pages */
     .page { display:none; } .page.active { display:block; }
+    #page-agent { height:100%; }
+    #page-agent.active { display:flex !important; }
 
     /* Run panel */
     .run-panel { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin-bottom:20px; }
@@ -187,6 +189,70 @@
     /* Analyze section */
     .analyze-bar { display:flex; gap:8px; align-items:center; margin:16px 0 8px; padding:12px 14px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); }
     .analyze-bar span { flex:1; font-size:13px; color:var(--muted); }
+
+    /* Projetos sidebar */
+    .proj-row { padding:6px 14px; cursor:pointer; font-size:12px; color:var(--muted); display:flex; align-items:center; gap:7px; border-left:3px solid transparent; transition:all .12s; }
+    .proj-row:hover { background:var(--bg3); color:var(--text); }
+    .proj-row.ativo { background:rgba(188,140,255,.1); border-left-color:var(--purple); color:var(--purple); font-weight:600; }
+    .proj-row .pr-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .proj-row .pr-actions { display:none; gap:3px; flex-shrink:0; }
+    .proj-row:hover .pr-actions { display:flex; }
+    .proj-row.ativo .pr-actions { display:flex; }
+    .pr-btn { background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer; padding:1px 3px; line-height:1; }
+    .pr-btn:hover { color:var(--text); background:none; }
+    /* Banner projeto ativo */
+    .proj-ativo-banner { display:none; align-items:center; gap:8px; padding:5px 14px; background:rgba(188,140,255,.12); border-bottom:1px solid rgba(188,140,255,.25); font-size:12px; color:var(--purple); flex-shrink:0; }
+    .proj-ativo-banner.show { display:flex; }
+
+    /* Modal */
+    .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:200; display:flex; align-items:center; justify-content:center; }
+    .modal { background:var(--bg2); border:1px solid var(--border); border-radius:8px; width:520px; max-width:95vw; max-height:85vh; display:flex; flex-direction:column; overflow:hidden; }
+    .modal-header { padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+    .modal-header h3 { flex:1; font-size:14px; font-weight:600; }
+    .modal-body { flex:1; overflow-y:auto; padding:16px 18px; display:flex; flex-direction:column; gap:12px; }
+    .modal-footer { padding:12px 18px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end; }
+    .field-group { display:flex; flex-direction:column; gap:4px; }
+    .field-group label { font-size:12px; color:var(--muted); }
+    .field-group input, .field-group textarea { width:100%; }
+    .chip-list { display:flex; flex-wrap:wrap; gap:6px; min-height:32px; padding:6px; background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); }
+    .chip { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; background:rgba(88,166,255,.12); border:1px solid rgba(88,166,255,.3); border-radius:10px; font-size:12px; color:var(--accent); }
+    .chip .chip-x { cursor:pointer; color:var(--muted); font-size:11px; margin-left:2px; }
+    .chip .chip-x:hover { color:var(--red); }
+    .search-results { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); max-height:160px; overflow-y:auto; }
+    .search-result-item { padding:6px 10px; font-size:12px; cursor:pointer; color:var(--text); }
+    .search-result-item:hover { background:var(--bg3); color:var(--accent); }
+
+    /* Página Alvos */
+    .alvos-toolbar { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+    .alvos-toolbar input { flex:1; min-width:200px; }
+    .sel-count { font-size:12px; color:var(--muted); }
+    .sel-count.has { color:var(--accent); font-weight:600; }
+    .alvos-table { width:100%; border-collapse:collapse; }
+    .alvos-table th { text-align:left; padding:7px 10px; font-size:11px; font-weight:600; color:var(--muted); border-bottom:1px solid var(--border); text-transform:uppercase; letter-spacing:.5px; }
+    .alvos-table td { padding:8px 10px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:middle; }
+    .alvos-table tr:hover td { background:var(--bg2); }
+    .alvos-table input[type=checkbox] { accent-color:var(--accent); width:14px; height:14px; cursor:pointer; }
+    .tool-pill { display:inline-block; padding:1px 6px; border-radius:8px; font-size:10px; font-weight:600; margin:1px; background:var(--bg3); border:1px solid var(--border); color:var(--muted); }
+
+    /* Chat */
+    .chat-wrap { display:flex; flex-direction:column; height:100%; }
+    .chat-messages { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
+    .chat-msg { max-width:85%; display:flex; flex-direction:column; gap:4px; }
+    .chat-msg.user { align-self:flex-end; align-items:flex-end; }
+    .chat-msg.assistant { align-self:flex-start; align-items:flex-start; }
+    .chat-bubble { padding:10px 14px; border-radius:12px; font-size:13px; line-height:1.6; white-space:pre-wrap; word-break:break-word; }
+    .chat-msg.user .chat-bubble { background:var(--accent); color:#0d1117; border-bottom-right-radius:3px; }
+    .chat-msg.assistant .chat-bubble { background:var(--bg2); border:1px solid var(--border); color:var(--text); border-bottom-left-radius:3px; }
+    .chat-msg .chat-time { font-size:10px; color:var(--muted); }
+    .chat-input-bar { padding:12px 16px; border-top:1px solid var(--border); display:flex; gap:8px; align-items:flex-end; background:var(--bg2); flex-shrink:0; }
+    .chat-input-bar textarea { flex:1; resize:none; min-height:38px; max-height:120px; font-family:var(--font); font-size:13px; line-height:1.5; padding:8px 10px; overflow-y:auto; }
+    .chat-session-bar { padding:8px 16px; border-bottom:1px solid var(--border); display:flex; gap:8px; align-items:center; background:var(--bg2); flex-shrink:0; }
+    .chat-session-bar select { flex:1; max-width:280px; }
+    .chat-typing { display:flex; gap:4px; align-items:center; padding:10px 14px; }
+    .chat-typing span { width:7px; height:7px; border-radius:50%; background:var(--muted); animation:bounce .8s ease-in-out infinite; }
+    .chat-typing span:nth-child(2) { animation-delay:.15s; }
+    .chat-typing span:nth-child(3) { animation-delay:.30s; }
+    @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-6px)} }
   </style>
 </head>
 <body>
@@ -201,14 +267,19 @@
     <div class="sidebar-section">
       <div class="sidebar-label">Navegação</div>
       <div class="sidebar-item active" onclick="showPage('run',this)">🚀 Executar Scan</div>
+      <div class="sidebar-item" onclick="showPage('agent',this)">🤖 Agente</div>
+      <div class="sidebar-item" onclick="showPage('alvos',this)">🎯 Alvos</div>
       <div class="sidebar-item" onclick="showPage('dashboard',this)">📊 Dashboard</div>
       <div class="sidebar-item" onclick="showPage('scans',this)">🔍 Todos os Scans</div>
       <div class="sidebar-item" onclick="showPage('vulns',this)">🚨 Vulnerabilidades</div>
     </div>
-    <div class="sidebar-section">
-      <div class="sidebar-label">Alvos</div>
-      <div class="sidebar-scroll" id="alvos-list">
-        <div style="padding:8px 16px;color:var(--muted);font-size:12px;"><span class="spinner"></span></div>
+    <div class="sidebar-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+      <div class="sidebar-label" style="display:flex;align-items:center;gap:4px;">
+        Projetos
+        <button onclick="abrirModalProjeto()" style="margin-left:auto;padding:1px 7px;font-size:11px;border-radius:8px;" title="Novo projeto">+</button>
+      </div>
+      <div class="sidebar-scroll" id="projetos-list">
+        <div style="padding:8px 14px;color:var(--muted);font-size:12px;"><span class="spinner"></span></div>
       </div>
     </div>
   </aside>
@@ -218,6 +289,13 @@
     <div class="topbar">
       <div class="topbar-title" id="page-title">Executar Scan</div>
       <button onclick="reloadAll()">↻ Atualizar</button>
+    </div>
+    <!-- Banner projeto ativo -->
+    <div class="proj-ativo-banner" id="proj-ativo-banner">
+      <span>📁</span>
+      <span id="proj-ativo-nome" style="font-weight:600;"></span>
+      <span style="color:var(--muted);font-size:11px;">— scans serão adicionados a este projeto</span>
+      <button onclick="sairDoProjeto()" style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:8px;background:rgba(248,81,73,.15);border-color:rgba(248,81,73,.3);color:var(--red);">Sair do projeto</button>
     </div>
     <div class="content">
 
@@ -413,6 +491,58 @@
 
       </div><!-- /page-run -->
 
+      <!-- PAGE: Alvos -->
+      <div class="page" id="page-alvos">
+        <div class="alvos-toolbar">
+          <input type="text" id="alvos-filtro" placeholder="Filtrar por domínio… ex: exemplo.com" oninput="filtrarAlvos()" />
+          <button onclick="selecionarTodosVisiveis()" style="font-size:12px;">Selecionar todos</button>
+          <button onclick="desselecionarTodos()" style="font-size:12px;">Limpar seleção</button>
+          <span class="sel-count" id="alvos-sel-count">0 selecionados</span>
+          <button class="purple" id="btn-add-projeto" onclick="abrirModalAdicionarProjeto()" disabled>Adicionar ao projeto →</button>
+        </div>
+        <table class="alvos-table">
+          <thead>
+            <tr>
+              <th style="width:32px;"><input type="checkbox" id="chk-all" onchange="toggleTodos(this.checked)" /></th>
+              <th>Alvo</th>
+              <th>Scans</th>
+              <th>Ferramentas</th>
+              <th>Último scan</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="alvos-tbody">
+            <tr><td colspan="6" style="text-align:center;padding:20px;"><span class="spinner"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- PAGE: Agente -->
+      <div class="page" id="page-agent" style="height:100%;flex-direction:column;">
+        <div class="chat-wrap">
+          <!-- Barra de sessão -->
+          <div class="chat-session-bar">
+            <select id="chat-session-select" onchange="trocarSessao(this.value)" style="max-width:240px;">
+              <option value="default">Sessão padrão</option>
+            </select>
+            <button onclick="novaSessao()" style="font-size:12px;padding:4px 10px;">+ Nova sessão</button>
+            <span id="chat-session-label" style="font-size:11px;color:var(--muted);flex:1;text-align:right;"></span>
+          </div>
+          <!-- Mensagens -->
+          <div class="chat-messages" id="chat-messages">
+            <div class="chat-msg assistant">
+              <div class="chat-bubble">Olá! Sou o QuarkScan Agent. Posso executar scans, analisar resultados e responder perguntas sobre os alvos. Como posso ajudar?</div>
+            </div>
+          </div>
+          <!-- Input -->
+          <div class="chat-input-bar">
+            <textarea id="chat-input" placeholder="Digite sua mensagem… (Enter envia, Shift+Enter nova linha)"
+              onkeydown="chatKeydown(event)" rows="1" oninput="autoResizeTextarea(this)"></textarea>
+            <button class="primary" id="chat-send-btn" onclick="enviarMensagem()" style="padding:8px 14px;align-self:flex-end;">Enviar</button>
+          </div>
+        </div>
+      </div>
+
       <!-- PAGE: Dashboard -->
       <div class="page" id="page-dashboard">
         <div class="stats-bar">
@@ -481,6 +611,65 @@
   </div>
 </div>
 
+<!-- Modal: Adicionar alvos selecionados a um projeto -->
+<div id="modal-add-proj" style="display:none;" class="modal-backdrop" onclick="if(event.target===this)fecharModalAddProj()">
+  <div class="modal" style="width:400px;">
+    <div class="modal-header">
+      <h3>Adicionar ao Projeto</h3>
+      <button class="detail-close" onclick="fecharModalAddProj()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:8px;"><span id="modal-add-count"></span> alvo(s) serão adicionados.</p>
+      <div class="field-group">
+        <label>Selecione o projeto</label>
+        <select id="modal-add-proj-select" style="width:100%;"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="fecharModalAddProj()">Cancelar</button>
+      <button class="primary" onclick="confirmarAdicionarAoProjeto()">Adicionar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Projeto -->
+<div id="modal-projeto" style="display:none;" class="modal-backdrop" onclick="if(event.target===this)fecharModalProjeto()">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-proj-titulo">Novo Projeto</h3>
+      <button class="detail-close" onclick="fecharModalProjeto()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="modal-proj-id" value="" />
+      <div class="field-group">
+        <label>Nome do Projeto</label>
+        <input id="modal-proj-nome" type="text" placeholder="Ex: Cliente ACME – Bug Bounty" />
+      </div>
+      <div class="field-group">
+        <label>Descrição (opcional)</label>
+        <textarea id="modal-proj-desc" rows="2" placeholder="Escopo, objetivos…" style="width:100%;resize:vertical;"></textarea>
+      </div>
+      <div class="field-group">
+        <label>Alvos do projeto</label>
+        <div class="chip-list" id="modal-alvos-chips"></div>
+      </div>
+      <div class="field-group">
+        <label>Adicionar alvo (busca por domínio)</label>
+        <div style="display:flex;gap:6px;">
+          <input id="modal-alvo-search" type="text" placeholder="ex: exemplo.com"
+            oninput="buscarAlvos(this.value)" autocomplete="off" style="flex:1;" />
+          <button onclick="adicionarAlvoDigitado()" style="padding:6px 12px;font-size:12px;">Adicionar</button>
+        </div>
+        <div class="search-results" id="modal-search-results" style="display:none;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="fecharModalProjeto()">Cancelar</button>
+      <button class="primary" onclick="salvarProjeto()">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
 let scansOffset = 0, scansTotal = 0;
@@ -489,10 +678,19 @@ let debounceTimer = null;
 let currentTool = 'nmap';
 let activeSSE = null;
 let lastRunAlvo = null;
+let chatSessionId = 'default';
+let chatTyping = false;
+let modalProjAlvos = [];   // alvos no modal atual
 
 // ── Init ───────────────────────────────────────────────────────────────────
 async function init() {
-  await Promise.all([loadAlvos(), loadFerramentas(), loadStats(), loadDashScans()]);
+  // Recupera projeto ativo do servidor (persiste enquanto o servidor estiver rodando)
+  try {
+    const pa = await api('/api/projeto-ativo');
+    if (pa && pa.id) { projetoAtivo = pa; atualizarBannerProjeto(); }
+  } catch {}
+  await Promise.all([loadProjetos(), loadFerramentas(), loadStats(), loadDashScans()]);
+  loadChatSessoes();
 }
 
 async function api(path, opts) {
@@ -516,32 +714,90 @@ function showPage(name, el) {
   document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
   document.getElementById(`page-${name}`).classList.add('active');
   if (el) el.classList.add('active');
-  const titles = {run:'Executar Scan', dashboard:'Dashboard', scans:'Todos os Scans', vulns:'Vulnerabilidades'};
+  const titles = {run:'Executar Scan', alvos:'Alvos', agent:'Agente', dashboard:'Dashboard', scans:'Todos os Scans', vulns:'Vulnerabilidades'};
   document.getElementById('page-title').textContent = titles[name] || name;
   if (name === 'scans') loadScans();
   if (name === 'dashboard') { loadStats(); loadDashScans(); }
+  if (name === 'agent') setTimeout(() => scrollChatBottom(), 50);
+  if (name === 'alvos') loadAlvosTodos();
 }
 
 function reloadAll() {
-  loadAlvos(); loadFerramentas(); loadStats(); loadDashScans();
+  loadProjetos(); loadFerramentas(); loadStats(); loadDashScans();
+  const cur = document.querySelector('.page.active');
+  if (cur && cur.id === 'page-alvos') loadAlvosTodos();
 }
 
-// ── Alvos ──────────────────────────────────────────────────────────────────
-async function loadAlvos() {
-  const list = document.getElementById('alvos-list');
-  try {
-    const alvos = await api('/api/alvos');
-    const real  = alvos.filter(a => !a.alvo.startsWith('__bypass__'));
-    list.innerHTML = real.length ? real.map(a =>
-      `<div class="sidebar-item" onclick="filterByAlvo('${a.alvo}',this)" title="${a.alvo}">
-        <span>🎯</span><span style="overflow:hidden;text-overflow:ellipsis">${a.alvo}</span>
-        <span class="badge">${a.total}</span></div>`
-    ).join('') : `<div style="padding:8px 16px;color:var(--muted);font-size:12px;">Nenhum alvo</div>`;
+// ── Projeto ativo ──────────────────────────────────────────────────────────
+let projetoAtivo = null;  // {id, nome}
 
-    const sel = document.getElementById('vuln-alvo-select');
-    sel.innerHTML = '<option value="">Selecione um alvo…</option>' +
-      real.map(a => `<option value="${a.alvo}">${a.alvo}</option>`).join('');
-  } catch { list.innerHTML = `<div style="padding:8px 16px;color:var(--red);font-size:12px;">Erro</div>`; }
+async function entrarNoProjeto(id, nome) {
+  projetoAtivo = {id, nome};
+  await api('/api/projeto-ativo', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({id, nome}),
+  });
+  atualizarBannerProjeto();
+  loadProjetos();
+}
+
+async function sairDoProjeto() {
+  projetoAtivo = null;
+  await api('/api/projeto-ativo', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({limpar: true}),
+  });
+  atualizarBannerProjeto();
+  loadProjetos();
+}
+
+function atualizarBannerProjeto() {
+  const banner = document.getElementById('proj-ativo-banner');
+  if (projetoAtivo) {
+    document.getElementById('proj-ativo-nome').textContent = projetoAtivo.nome;
+    banner.classList.add('show');
+  } else {
+    banner.classList.remove('show');
+  }
+}
+
+// ── Projetos (sidebar) ─────────────────────────────────────────────────────
+async function loadProjetos() {
+  const list = document.getElementById('projetos-list');
+  try {
+    const projs = await api('/api/projetos');
+
+    // Preenche select de vulnerabilidades com todos os alvos
+    try {
+      const alvosResp = await api('/api/alvos');
+      const todosAlvos = alvosResp.filter(a => !a.alvo.startsWith('__bypass__'));
+      const sel = document.getElementById('vuln-alvo-select');
+      sel.innerHTML = '<option value="">Selecione um alvo…</option>' +
+        todosAlvos.map(a => `<option value="${a.alvo}">${a.alvo}</option>`).join('');
+    } catch {}
+
+    if (!projs.length) {
+      list.innerHTML = `<div style="padding:8px 14px;color:var(--muted);font-size:12px;">Nenhum projeto. Clique em + para criar.</div>`;
+      return;
+    }
+
+    list.innerHTML = projs.map(p => {
+      const isAtivo = projetoAtivo && projetoAtivo.id === p.id;
+      const nome = p.nome.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      const alvosCount = (p.alvos || []).length;
+      return `<div class="proj-row ${isAtivo ? 'ativo' : ''}" onclick="entrarNoProjeto(${p.id},'${nome}')" title="${isAtivo ? 'Projeto ativo' : 'Clique para entrar'}">
+        <span>${isAtivo ? '▶' : '📁'}</span>
+        <span class="pr-name">${p.nome}</span>
+        <span style="font-size:10px;color:var(--muted);">${alvosCount}a</span>
+        <span class="pr-actions">
+          <button class="pr-btn" onclick="event.stopPropagation();abrirModalProjeto(${p.id})" title="Editar">✏</button>
+          <button class="pr-btn" onclick="event.stopPropagation();deletarProjeto(${p.id},'${nome}')" title="Excluir" style="color:var(--red);">✕</button>
+        </span>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div style="padding:8px 14px;color:var(--red);font-size:12px;">Erro: ${e.message}</div>`;
+  }
 }
 
 function filterByAlvo(alvo, el) {
@@ -550,6 +806,126 @@ function filterByAlvo(alvo, el) {
   if (el) el.classList.add('active');
   document.getElementById('filter-alvo').value = alvo;
   scansOffset = 0; loadScans();
+}
+
+// ── Modal Projeto ──────────────────────────────────────────────────────────
+let _buscarAlvosTimer = null;
+
+function abrirModalProjeto(projetoId = null) {
+  modalProjAlvos = [];
+  document.getElementById('modal-proj-id').value = projetoId || '';
+  document.getElementById('modal-proj-nome').value = '';
+  document.getElementById('modal-proj-desc').value = '';
+  document.getElementById('modal-alvo-search').value = '';
+  document.getElementById('modal-search-results').style.display = 'none';
+  document.getElementById('modal-proj-titulo').textContent = projetoId ? 'Editar Projeto' : 'Novo Projeto';
+  renderModalChips();
+
+  if (projetoId) {
+    // Carrega dados do projeto
+    api('/api/projetos').then(projs => {
+      const p = projs.find(x => x.id === projetoId);
+      if (p) {
+        document.getElementById('modal-proj-nome').value = p.nome;
+        document.getElementById('modal-proj-desc').value = p.descricao || '';
+        modalProjAlvos = [...(p.alvos || [])];
+        renderModalChips();
+      }
+    });
+  }
+  document.getElementById('modal-projeto').style.display = 'flex';
+}
+
+function fecharModalProjeto() {
+  document.getElementById('modal-projeto').style.display = 'none';
+  document.getElementById('modal-search-results').style.display = 'none';
+}
+
+function renderModalChips() {
+  const el = document.getElementById('modal-alvos-chips');
+  el.innerHTML = modalProjAlvos.length
+    ? modalProjAlvos.map(a =>
+        `<span class="chip">${a}<span class="chip-x" onclick="removerAlvoModal('${a}')">✕</span></span>`
+      ).join('')
+    : `<span style="color:var(--muted);font-size:12px;padding:4px;">Nenhum alvo adicionado</span>`;
+}
+
+function removerAlvoModal(alvo) {
+  modalProjAlvos = modalProjAlvos.filter(a => a !== alvo);
+  renderModalChips();
+}
+
+function adicionarAlvoModal(alvo) {
+  alvo = alvo.trim().toLowerCase();
+  if (!alvo || modalProjAlvos.includes(alvo)) return;
+  modalProjAlvos.push(alvo);
+  renderModalChips();
+  document.getElementById('modal-alvo-search').value = '';
+  document.getElementById('modal-search-results').style.display = 'none';
+}
+
+function adicionarAlvoDigitado() {
+  adicionarAlvoModal(document.getElementById('modal-alvo-search').value);
+}
+
+async function buscarAlvos(q) {
+  clearTimeout(_buscarAlvosTimer);
+  const res = document.getElementById('modal-search-results');
+  if (!q || q.length < 2) { res.style.display = 'none'; return; }
+  _buscarAlvosTimer = setTimeout(async () => {
+    try {
+      const alvos = await api(`/api/alvos/buscar?q=${encodeURIComponent(q)}`);
+      if (!alvos.length) { res.style.display = 'none'; return; }
+      res.style.display = 'block';
+      res.innerHTML = alvos.map(a =>
+        `<div class="search-result-item" onclick="adicionarAlvoModal('${a}')">${a}</div>`
+      ).join('');
+    } catch { res.style.display = 'none'; }
+  }, 250);
+}
+
+async function salvarProjeto() {
+  const pid = document.getElementById('modal-proj-id').value;
+  const nome = document.getElementById('modal-proj-nome').value.trim();
+  const desc = document.getElementById('modal-proj-desc').value.trim();
+  if (!nome) { alert('Informe o nome do projeto.'); return; }
+
+  try {
+    if (pid) {
+      // Atualiza nome/desc
+      await api(`/api/projetos/${pid}`, {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({nome, descricao: desc}),
+      });
+      // Remove alvos existentes e re-adiciona
+      const projs = await api('/api/projetos');
+      const p = projs.find(x => x.id === parseInt(pid));
+      for (const a of (p?.alvos || [])) {
+        await api(`/api/projetos/${pid}/alvos/${encodeURIComponent(a)}`, {method:'DELETE'});
+      }
+      for (const a of modalProjAlvos) {
+        await api(`/api/projetos/${pid}/alvos`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({alvo: a}),
+        });
+      }
+    } else {
+      await api('/api/projetos', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({nome, descricao: desc, alvos: modalProjAlvos}),
+      });
+    }
+    fecharModalProjeto();
+    loadProjetos();
+  } catch(e) { alert(`Erro ao salvar: ${e.message}`); }
+}
+
+async function deletarProjeto(id, nome) {
+  if (!confirm(`Excluir projeto "${nome}"?`)) return;
+  await api(`/api/projetos/${id}`, {method: 'DELETE'});
+  loadProjetos();
 }
 
 // ── Ferramentas ────────────────────────────────────────────────────────────
@@ -659,6 +1035,123 @@ async function loadVulns() {
        <td style="color:var(--muted);font-size:12px">${ts(v.ultima_vez)}</td></tr>`
     ).join('') : `<tr><td colspan="7"><div class="empty-state"><div class="icon">✅</div><p>Nenhuma vulnerabilidade registrada.</p></div></td></tr>`;
   } catch(e) { tbody.innerHTML = `<tr><td colspan="7" style="color:var(--red)">${e.message}</td></tr>`; }
+}
+
+// ── Página Alvos ───────────────────────────────────────────────────────────
+let _todosAlvos = [];
+let _selAlvos = new Set();
+
+async function loadAlvosTodos() {
+  const tbody = document.getElementById('alvos-tbody');
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;"><span class="spinner"></span></td></tr>`;
+  try {
+    _todosAlvos = await api('/api/alvos/todos');
+    _selAlvos = new Set();
+    atualizarSelCount();
+    renderAlvosTabela(_todosAlvos);
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--red);padding:20px;">${e.message}</td></tr>`;
+  }
+}
+
+function renderAlvosTabela(lista) {
+  const tbody = document.getElementById('alvos-tbody');
+  if (!lista.length) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="icon">🎯</div><p>Nenhum alvo encontrado.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = lista.map(a => {
+    const tools = (a.ferramentas || '').split(',').filter(Boolean);
+    const toolPills = tools.map(t => `<span class="tool-pill ${t}">${t}</span>`).join('');
+    const checked = _selAlvos.has(a.alvo) ? 'checked' : '';
+    return `<tr>
+      <td><input type="checkbox" ${checked} onchange="toggleAlvo('${a.alvo}',this.checked)" /></td>
+      <td style="font-family:var(--mono);font-size:12px;">${a.alvo}</td>
+      <td style="color:var(--muted);">${a.total_scans}</td>
+      <td>${toolPills}</td>
+      <td style="color:var(--muted);font-size:12px;">${ts(a.ultimo_scan)}</td>
+      <td><button onclick="filterByAlvo('${a.alvo}',null);showPage('scans',null);" style="font-size:11px;padding:3px 8px;">Ver scans</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function filtrarAlvos() {
+  const q = document.getElementById('alvos-filtro').value.trim().toLowerCase();
+  const filtrado = q ? _todosAlvos.filter(a => a.alvo.includes(q)) : _todosAlvos;
+  renderAlvosTabela(filtrado);
+  // Sincroniza checkbox "all"
+  const vis = filtrado.map(a => a.alvo);
+  const todosSelec = vis.length > 0 && vis.every(a => _selAlvos.has(a));
+  document.getElementById('chk-all').checked = todosSelec;
+}
+
+function toggleAlvo(alvo, checked) {
+  if (checked) _selAlvos.add(alvo); else _selAlvos.delete(alvo);
+  atualizarSelCount();
+}
+
+function toggleTodos(checked) {
+  const q = document.getElementById('alvos-filtro').value.trim().toLowerCase();
+  const visiveis = q ? _todosAlvos.filter(a => a.alvo.includes(q)) : _todosAlvos;
+  visiveis.forEach(a => { if (checked) _selAlvos.add(a.alvo); else _selAlvos.delete(a.alvo); });
+  renderAlvosTabela(visiveis.length < _todosAlvos.length ? visiveis : _todosAlvos);
+  atualizarSelCount();
+}
+
+function selecionarTodosVisiveis() {
+  const q = document.getElementById('alvos-filtro').value.trim().toLowerCase();
+  const visiveis = q ? _todosAlvos.filter(a => a.alvo.includes(q)) : _todosAlvos;
+  visiveis.forEach(a => _selAlvos.add(a.alvo));
+  filtrarAlvos();
+  atualizarSelCount();
+}
+
+function desselecionarTodos() {
+  _selAlvos.clear();
+  filtrarAlvos();
+  atualizarSelCount();
+}
+
+function atualizarSelCount() {
+  const n = _selAlvos.size;
+  const el = document.getElementById('alvos-sel-count');
+  el.textContent = `${n} selecionado(s)`;
+  el.className = `sel-count${n > 0 ? ' has' : ''}`;
+  document.getElementById('btn-add-projeto').disabled = n === 0;
+}
+
+// ── Modal Adicionar ao Projeto ─────────────────────────────────────────────
+async function abrirModalAdicionarProjeto() {
+  if (_selAlvos.size === 0) return;
+  document.getElementById('modal-add-count').textContent = _selAlvos.size;
+  const projs = await api('/api/projetos');
+  const sel = document.getElementById('modal-add-proj-select');
+  if (!projs.length) { alert('Nenhum projeto criado. Crie um projeto primeiro.'); return; }
+  sel.innerHTML = projs.map(p => `<option value="${p.id}">${p.nome} (${(p.alvos||[]).length} alvos)</option>`).join('');
+  if (projetoAtivo) sel.value = projetoAtivo.id;
+  document.getElementById('modal-add-proj').style.display = 'flex';
+}
+
+function fecharModalAddProj() {
+  document.getElementById('modal-add-proj').style.display = 'none';
+}
+
+async function confirmarAdicionarAoProjeto() {
+  const pid = document.getElementById('modal-add-proj-select').value;
+  if (!pid) return;
+  const alvos = [..._selAlvos];
+  try {
+    const r = await api(`/api/projetos/${pid}/adicionar-alvos`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({alvos}),
+    });
+    fecharModalAddProj();
+    alert(`${r.adicionados} alvo(s) adicionados ao projeto.`);
+    _selAlvos.clear();
+    filtrarAlvos();
+    atualizarSelCount();
+    loadProjetos();
+  } catch(e) { alert(`Erro: ${e.message}`); }
 }
 
 // ── Tool selector ──────────────────────────────────────────────────────────
@@ -1001,6 +1494,156 @@ function switchTab(name, el) {
   ['resultado','raw','ai'].forEach(t =>
     document.getElementById(`tab-${t}`).style.display = (t===name) ? 'block' : 'none'
   );
+}
+
+// ── Chat ───────────────────────────────────────────────────────────────────
+async function loadChatSessoes() {
+  try {
+    const sessoes = await api('/api/chat/sessoes');
+    const sel = document.getElementById('chat-session-select');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="default">Sessão padrão</option>' +
+      sessoes.filter(s => s.session_id !== 'default').map(s =>
+        `<option value="${s.session_id}" ${s.session_id===cur?'selected':''}>${s.session_id.substring(0,12)}… (${s.msgs} msgs)</option>`
+      ).join('');
+    sel.value = chatSessionId;
+  } catch {}
+}
+
+async function trocarSessao(sid) {
+  chatSessionId = sid;
+  const msgs = document.getElementById('chat-messages');
+  msgs.innerHTML = '';
+  try {
+    const hist = await api(`/api/chat/${sid}/historico`);
+    if (!hist.length) {
+      appendChatMsg('assistant', 'Sessão vazia. Como posso ajudar?');
+      return;
+    }
+    hist.forEach(m => appendChatMsg(m.role, m.conteudo, m.timestamp));
+    scrollChatBottom();
+  } catch(e) { appendChatMsg('assistant', 'Erro ao carregar histórico.'); }
+}
+
+function novaSessao() {
+  chatSessionId = 'sess_' + Date.now();
+  const sel = document.getElementById('chat-session-select');
+  const opt = document.createElement('option');
+  opt.value = chatSessionId;
+  opt.textContent = `Nova sessão`;
+  opt.selected = true;
+  sel.appendChild(opt);
+  document.getElementById('chat-messages').innerHTML = '';
+  appendChatMsg('assistant', 'Nova sessão iniciada. Como posso ajudar?');
+}
+
+function appendChatMsg(role, texto, timestamp = null) {
+  const wrap = document.getElementById('chat-messages');
+  const time = timestamp ? timestamp.replace('T',' ').replace(/\.\d+$/,'') : new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.className = `chat-msg ${role}`;
+  div.innerHTML = `<div class="chat-bubble">${escHtml(texto)}</div><div class="chat-time">${time}</div>`;
+  wrap.appendChild(div);
+  scrollChatBottom();
+  return div;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function scrollChatBottom() {
+  const el = document.getElementById('chat-messages');
+  el.scrollTop = el.scrollHeight;
+}
+
+function appendTypingIndicator() {
+  const wrap = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg assistant';
+  div.id = 'chat-typing-bubble';
+  div.innerHTML = `<div class="chat-bubble"><div class="chat-typing"><span></span><span></span><span></span></div></div>`;
+  wrap.appendChild(div);
+  scrollChatBottom();
+}
+
+function removeTypingIndicator() {
+  const el = document.getElementById('chat-typing-bubble');
+  if (el) el.remove();
+}
+
+function autoResizeTextarea(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function chatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    enviarMensagem();
+  }
+}
+
+async function enviarMensagem() {
+  if (chatTyping) return;
+  const input = document.getElementById('chat-input');
+  const texto = input.value.trim();
+  if (!texto) return;
+  input.value = '';
+  input.style.height = 'auto';
+
+  appendChatMsg('user', texto);
+
+  chatTyping = true;
+  document.getElementById('chat-send-btn').disabled = true;
+  appendTypingIndicator();
+
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mensagem: texto, session_id: chatSessionId}),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let resposta = '';
+
+    removeTypingIndicator();
+    const bubble = appendChatMsg('assistant', '…');
+    const bubbleEl = bubble.querySelector('.chat-bubble');
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        try {
+          const msg = JSON.parse(line.slice(5).trim());
+          if (msg.type === 'chunk') {
+            resposta = msg.data;
+            bubbleEl.textContent = resposta;
+            scrollChatBottom();
+          } else if (msg.type === 'done') {
+            loadChatSessoes();
+          } else if (msg.type === 'error') {
+            bubbleEl.innerHTML = `<span style="color:var(--red)">Erro: ${escHtml(msg.data)}</span>`;
+          }
+        } catch {}
+      }
+    }
+  } catch(e) {
+    removeTypingIndicator();
+    appendChatMsg('assistant', `Erro de conexão: ${e.message}`);
+  } finally {
+    chatTyping = false;
+    document.getElementById('chat-send-btn').disabled = false;
+  }
 }
 
 // Show preset row for the initially selected tool

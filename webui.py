@@ -25,6 +25,9 @@ from security import validar_alvo, validar_args, FLAGS_PERMITIDAS
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
 
+# Projeto ativo global (por instância do servidor)
+_projeto_ativo: dict | None = None  # {"id": int, "nome": str}
+
 _HTML_PATH = os.path.join(os.path.dirname(__file__), "webui.html")
 
 
@@ -200,7 +203,9 @@ def _run_scan_streaming(ferramenta: str, alvo: str, opts: dict, q: queue.Queue):
         storage.salvar_metrica(ferramenta, alvo, proc.returncode, duracao_ms, proc.returncode == 0)
 
         scan_id = storage.ultimo_id(alvo, ferramenta)
-        q.put({"type": "done", "exit_code": proc.returncode, "duracao_ms": duracao_ms, "scan_id": scan_id})
+        if _projeto_ativo:
+            storage.projeto_adicionar_alvo(_projeto_ativo["id"], alvo)
+        q.put({"type": "done", "exit_code": proc.returncode, "duracao_ms": duracao_ms, "scan_id": scan_id, "projeto_ativo": _projeto_ativo})
 
     except ValueError as e:
         q.put({"type": "error", "data": str(e)})
@@ -234,6 +239,173 @@ def api_run():
     q = queue.Queue()
     t = threading.Thread(target=_run_scan_streaming, args=(ferramenta, alvo_limpo, opts, q), daemon=True)
     t.start()
+
+    def generate():
+        while True:
+            try:
+                msg = q.get(timeout=120)
+                yield f"data: {json.dumps(msg)}\n\n"
+                if msg["type"] in ("done", "error"):
+                    break
+            except queue.Empty:
+                yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ─── Projetos ─────────────────────────────────────────────────────────────────
+
+@app.route("/api/projetos", methods=["GET"])
+def api_projetos_listar():
+    return jsonify(storage.projetos_listar())
+
+
+@app.route("/api/projetos", methods=["POST"])
+def api_projeto_criar():
+    body = request.get_json(force=True, silent=True) or {}
+    nome = (body.get("nome") or "").strip()
+    if not nome:
+        abort(400, "Campo 'nome' obrigatório.")
+    pid = storage.projeto_criar(nome, body.get("descricao", ""))
+    # Adiciona alvos iniciais se informados
+    for alvo in body.get("alvos", []):
+        a = validar_alvo(alvo)
+        if a:
+            storage.projeto_adicionar_alvo(pid, a)
+    return jsonify({"id": pid}), 201
+
+
+@app.route("/api/projetos/<int:pid>", methods=["PUT"])
+def api_projeto_atualizar(pid):
+    body = request.get_json(force=True, silent=True) or {}
+    storage.projeto_atualizar(pid, body.get("nome"), body.get("descricao"))
+    return jsonify({"ok": True})
+
+
+@app.route("/api/projetos/<int:pid>", methods=["DELETE"])
+def api_projeto_deletar(pid):
+    storage.projeto_deletar(pid)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/projetos/<int:pid>/alvos", methods=["POST"])
+def api_projeto_add_alvo(pid):
+    body = request.get_json(force=True, silent=True) or {}
+    alvo = validar_alvo((body.get("alvo") or "").strip())
+    if not alvo:
+        abort(400, "Alvo inválido.")
+    storage.projeto_adicionar_alvo(pid, alvo)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/projetos/<int:pid>/alvos/<path:alvo>", methods=["DELETE"])
+def api_projeto_remove_alvo(pid, alvo):
+    storage.projeto_remover_alvo(pid, alvo)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/alvos/buscar")
+def api_alvos_buscar():
+    """Busca alvos no banco que contenham o termo."""
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify([])
+    return jsonify(storage.alvos_por_dominio(q))
+
+
+@app.route("/api/projeto-ativo", methods=["GET"])
+def api_projeto_ativo_get():
+    return jsonify(_projeto_ativo)
+
+
+@app.route("/api/projeto-ativo", methods=["POST"])
+def api_projeto_ativo_set():
+    global _projeto_ativo
+    body = request.get_json(force=True, silent=True) or {}
+    if body.get("limpar"):
+        _projeto_ativo = None
+    else:
+        pid  = body.get("id")
+        nome = body.get("nome", "")
+        if pid:
+            _projeto_ativo = {"id": int(pid), "nome": nome}
+        else:
+            _projeto_ativo = None
+    return jsonify(_projeto_ativo)
+
+
+@app.route("/api/alvos/todos")
+def api_alvos_todos():
+    """Lista todos os alvos distintos com metadados (para página Alvos)."""
+    return jsonify(storage.alvos_todos())
+
+
+@app.route("/api/projetos/<int:pid>/adicionar-alvos", methods=["POST"])
+def api_projeto_adicionar_alvos(pid):
+    """Adiciona múltiplos alvos a um projeto de uma vez."""
+    body = request.get_json(force=True, silent=True) or {}
+    alvos = body.get("alvos", [])
+    adicionados = 0
+    for alvo in alvos:
+        a = validar_alvo(str(alvo).strip())
+        if a:
+            storage.projeto_adicionar_alvo(pid, a)
+            adicionados += 1
+    return jsonify({"adicionados": adicionados})
+
+
+# ─── Chat com o Agente ────────────────────────────────────────────────────────
+
+@app.route("/api/chat/sessoes")
+def api_chat_sessoes():
+    return jsonify(storage.chat_sessoes())
+
+
+@app.route("/api/chat/<session_id>/historico")
+def api_chat_historico(session_id):
+    return jsonify(storage.chat_historico_sessao(session_id))
+
+
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    """SSE — envia mensagem ao supervisor LangGraph e faz streaming da resposta."""
+    body = request.get_json(force=True, silent=True) or {}
+    mensagem = (body.get("mensagem") or "").strip()
+    session_id = (body.get("session_id") or "default").strip()
+
+    if not mensagem:
+        abort(400, "Campo 'mensagem' obrigatório.")
+
+    from security import sanitizar_input
+    mensagem = sanitizar_input(mensagem)
+
+    # Salva mensagem do usuário
+    storage.chat_salvar_mensagem(session_id, "user", mensagem)
+
+    q = queue.Queue()
+
+    def _run_agent():
+        try:
+            import uuid
+            from agents.supervisor import supervisor
+            config = {"configurable": {"thread_id": session_id}}
+            resposta = supervisor.invoke({"messages": [("user", mensagem)]}, config=config)
+            conteudo = resposta["messages"][-1].content
+            if isinstance(conteudo, list):
+                texto = "\n".join(
+                    item.get("text", "") if isinstance(item, dict) else str(item)
+                    for item in conteudo
+                ).strip()
+            else:
+                texto = str(conteudo or "").strip()
+            storage.chat_salvar_mensagem(session_id, "assistant", texto)
+            q.put({"type": "chunk", "data": texto})
+            q.put({"type": "done"})
+        except Exception as e:
+            q.put({"type": "error", "data": str(e)})
+
+    threading.Thread(target=_run_agent, daemon=True).start()
 
     def generate():
         while True:
@@ -513,7 +685,10 @@ RESULTADOS:
             except Exception as e:
                 emit("info", data=f"Relatório IA falhou: {e}")
 
-        emit("done", message="Pipeline PTES completo.")
+        if _projeto_ativo:
+            storage.projeto_adicionar_alvo(_projeto_ativo["id"], alvo)
+
+        emit("done", message="Pipeline PTES completo.", projeto_ativo=_projeto_ativo)
 
     except Exception as e:
         emit("error", data=f"Autopilot falhou: {e}")

@@ -78,6 +78,34 @@ def _init():
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_metricas ON metricas_execucao(ferramenta, alvo)"
         )
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS projetos (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome        TEXT NOT NULL,
+                descricao   TEXT DEFAULT '',
+                criado_em   TEXT DEFAULT (datetime('now', 'localtime')),
+                atualizado  TEXT DEFAULT (datetime('now', 'localtime'))
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS projeto_alvos (
+                projeto_id  INTEGER NOT NULL REFERENCES projetos(id) ON DELETE CASCADE,
+                alvo        TEXT NOT NULL,
+                PRIMARY KEY (projeto_id, alvo)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS chat_historico (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id  TEXT NOT NULL,
+                role        TEXT NOT NULL,
+                conteudo    TEXT NOT NULL,
+                timestamp   TEXT DEFAULT (datetime('now', 'localtime'))
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chat ON chat_historico(session_id, timestamp)"
+        )
 
 
 _init()
@@ -327,6 +355,130 @@ def total_scans(alvo: str = None, ferramenta: str = None) -> int:
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         row = conn.execute(f"SELECT COUNT(*) AS n FROM resultados {where}", params).fetchone()
         return row["n"] if row else 0
+
+
+# ─── Projetos ─────────────────────────────────────────────────────────────────
+
+def projetos_listar() -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT p.*, GROUP_CONCAT(pa.alvo) AS alvos FROM projetos p "
+            "LEFT JOIN projeto_alvos pa ON p.id=pa.projeto_id "
+            "GROUP BY p.id ORDER BY p.atualizado DESC"
+        ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["alvos"] = [a for a in (d["alvos"] or "").split(",") if a]
+            result.append(d)
+        return result
+
+
+def projeto_criar(nome: str, descricao: str = "") -> int:
+    with _conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO projetos (nome, descricao) VALUES (?,?)", (nome, descricao)
+        )
+        return cur.lastrowid
+
+
+def projeto_atualizar(projeto_id: int, nome: str = None, descricao: str = None) -> None:
+    with _conn() as conn:
+        if nome is not None:
+            conn.execute("UPDATE projetos SET nome=?, atualizado=datetime('now','localtime') WHERE id=?", (nome, projeto_id))
+        if descricao is not None:
+            conn.execute("UPDATE projetos SET descricao=?, atualizado=datetime('now','localtime') WHERE id=?", (descricao, projeto_id))
+
+
+def projeto_deletar(projeto_id: int) -> None:
+    with _conn() as conn:
+        conn.execute("DELETE FROM projetos WHERE id=?", (projeto_id,))
+
+
+def projeto_adicionar_alvo(projeto_id: int, alvo: str) -> None:
+    with _conn() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO projeto_alvos (projeto_id, alvo) VALUES (?,?)",
+            (projeto_id, alvo.lower()),
+        )
+        conn.execute("UPDATE projetos SET atualizado=datetime('now','localtime') WHERE id=?", (projeto_id,))
+
+
+def projeto_remover_alvo(projeto_id: int, alvo: str) -> None:
+    with _conn() as conn:
+        conn.execute(
+            "DELETE FROM projeto_alvos WHERE projeto_id=? AND alvo=?",
+            (projeto_id, alvo.lower()),
+        )
+
+
+def alvos_por_dominio(dominio: str) -> list[str]:
+    """Retorna todos alvos (incluindo subdomínios) que contêm o domínio."""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT alvo FROM resultados WHERE alvo LIKE ? ORDER BY alvo",
+            (f"%{dominio.lower()}%",),
+        ).fetchall()
+    return [r["alvo"] for r in rows]
+
+
+def alvos_todos() -> list[dict]:
+    """Retorna todos alvos distintos com contagem de scans e ferramentas usadas."""
+    with _conn() as conn:
+        rows = conn.execute("""
+            SELECT alvo,
+                   COUNT(*) AS total_scans,
+                   MAX(timestamp) AS ultimo_scan,
+                   GROUP_CONCAT(DISTINCT ferramenta) AS ferramentas
+            FROM resultados
+            GROUP BY alvo
+            ORDER BY alvo
+        """).fetchall()
+    return [dict(r) for r in rows]
+
+
+def scan_adicionar_projeto(scan_id: int, projeto_id: int) -> None:
+    """Associa um scan a um projeto (via alvo do scan → projeto_alvos)."""
+    with _conn() as conn:
+        row = conn.execute("SELECT alvo FROM resultados WHERE id=?", (scan_id,)).fetchone()
+        if row:
+            conn.execute(
+                "INSERT OR IGNORE INTO projeto_alvos (projeto_id, alvo) VALUES (?,?)",
+                (projeto_id, row["alvo"]),
+            )
+            conn.execute(
+                "UPDATE projetos SET atualizado=datetime('now','localtime') WHERE id=?",
+                (projeto_id,),
+            )
+
+
+# ─── Chat Histórico ────────────────────────────────────────────────────────────
+
+def chat_salvar_mensagem(session_id: str, role: str, conteudo: str) -> int:
+    with _conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO chat_historico (session_id, role, conteudo) VALUES (?,?,?)",
+            (session_id, role, conteudo),
+        )
+        return cur.lastrowid
+
+
+def chat_historico_sessao(session_id: str, limite: int = 50) -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM chat_historico WHERE session_id=? ORDER BY timestamp DESC LIMIT ?",
+            (session_id, limite),
+        ).fetchall()
+        return list(reversed([dict(r) for r in rows]))
+
+
+def chat_sessoes() -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT session_id, MIN(timestamp) AS inicio, MAX(timestamp) AS ultimo, "
+            "COUNT(*) AS msgs FROM chat_historico GROUP BY session_id ORDER BY ultimo DESC LIMIT 20"
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def resumo_memoria(alvo_raiz: str) -> dict:
