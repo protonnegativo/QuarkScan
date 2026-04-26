@@ -8,6 +8,7 @@ Porta:     http://localhost:5000
 import json
 import os
 import queue
+import select
 import subprocess
 import sys
 import threading
@@ -100,7 +101,8 @@ def _build_command(ferramenta: str, alvo: str, opts: dict) -> list[str]:
         args_validados = validar_args(args_str)
         if not args_validados:
             raise ValueError(f"Argumentos nmap inválidos. Flags permitidas: {', '.join(sorted(FLAGS_PERMITIDAS))}")
-        return ["nmap"] + args_validados + [alvo]
+        # --stats-every emite progresso periódico no stderr (visível no terminal)
+        return ["nmap", "--stats-every", "5s"] + args_validados + [alvo]
 
     if ferramenta == "gobuster":
         wordlists = {
@@ -157,18 +159,33 @@ def _run_scan_streaming(ferramenta: str, alvo: str, opts: dict, q: queue.Queue):
         inicio = time.time()
         raw_lines = []
 
+        # stdbuf -oL força line-buffering no stdout do processo filho,
+        # necessário pois ferramentas como nmap/gobuster bufferizam quando
+        # não estão em TTY. stderr separado para capturar progresso do nmap.
         proc = subprocess.Popen(
-            comando,
+            ["stdbuf", "-oL", "-eL"] + comando,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
+            stderr=subprocess.PIPE,
+            bufsize=0,
         )
 
-        for linha in proc.stdout:
-            linha = linha.rstrip("\n")
-            raw_lines.append(linha)
-            q.put({"type": "line", "data": linha})
+        while True:
+            fds = select.select([proc.stdout, proc.stderr], [], [], 1.0)[0]
+            for fd in fds:
+                linha = fd.readline()
+                if linha:
+                    texto = linha.decode("utf-8", errors="replace").rstrip("\n")
+                    raw_lines.append(texto)
+                    q.put({"type": "line", "data": texto})
+            if proc.poll() is not None:
+                # Drena o que sobrou nos buffers
+                for fd in [proc.stdout, proc.stderr]:
+                    for linha in fd:
+                        texto = linha.decode("utf-8", errors="replace").rstrip("\n")
+                        if texto:
+                            raw_lines.append(texto)
+                            q.put({"type": "line", "data": texto})
+                break
 
         proc.wait()
         duracao_ms = int((time.time() - inicio) * 1000)
