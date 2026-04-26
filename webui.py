@@ -312,6 +312,241 @@ Seja técnico, direto e baseie-se exclusivamente nos dados fornecidos."""
     return jsonify({"analise": analise, "scan_ids": ids_atualizados})
 
 
+# ─── Autopilot (PTES pipeline com decisões IA entre fases) ───────────────────
+
+def _extract_open_ports(nmap_output: str) -> list[str]:
+    """Extrai portas abertas do output do nmap (ex: '80/tcp open http' → ['80'])."""
+    import re
+    ports = []
+    for line in nmap_output.splitlines():
+        m = re.match(r"^\s*(\d+)/tcp\s+open", line)
+        if m:
+            ports.append(m.group(1))
+    return ports
+
+
+def _extract_http_ports(nmap_output: str) -> list[str]:
+    """Retorna portas com serviços web (http/https/ssl)."""
+    import re
+    ports = []
+    for line in nmap_output.splitlines():
+        m = re.match(r"^\s*(\d+)/tcp\s+open\s+(\S+)", line)
+        if m and any(kw in m.group(2).lower() for kw in ("http", "ssl", "web")):
+            ports.append(m.group(1))
+    return ports or ["80", "443"]
+
+
+def _ai_decide_next_phase(phase_name: str, phase_output: str, alvo: str) -> dict:
+    """Chama o LLM para decidir os parâmetros da próxima fase."""
+    try:
+        from llm import criar_llm
+        llm = criar_llm("supervisor")
+        prompt = f"""Você é um especialista em pentest automatizado seguindo metodologia PTES.
+
+Alvo: {alvo}
+Fase concluída: {phase_name}
+Output:
+{phase_output[:3000]}
+
+Responda APENAS com um JSON válido (sem markdown, sem explicação) contendo os parâmetros
+para a próxima fase. Exemplo de formato:
+{{"argumentos": "-sV -sC -p 22,80,443", "portas": ["80", "443"], "protocolo": "https"}}
+
+Se não houver dados suficientes para decidir, retorne {{}}."""
+        resposta = llm.invoke(prompt)
+        conteudo = getattr(resposta, "content", str(resposta)).strip()
+        import re, json as _json
+        m = re.search(r"\{.*\}", conteudo, re.DOTALL)
+        if m:
+            return _json.loads(m.group(0))
+    except Exception:
+        pass
+    return {}
+
+
+def _run_phase(ferramenta: str, alvo: str, opts: dict) -> tuple[int, str]:
+    """Executa uma ferramenta e retorna (exit_code, raw_output)."""
+    import subprocess, time
+    try:
+        comando = _build_command(ferramenta, alvo, opts)
+        inicio = time.time()
+        proc = subprocess.Popen(
+            ["stdbuf", "-oL", "-eL"] + comando,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
+        )
+        stdout, stderr = proc.communicate(timeout=600)
+        duracao_ms = int((time.time() - inicio) * 1000)
+        raw = (stdout + stderr).decode("utf-8", errors="replace")
+        storage.salvar(alvo, ferramenta, raw, parametros={**opts, "via": "autopilot"}, raw_output=raw)
+        storage.salvar_metrica(ferramenta, alvo, proc.returncode, duracao_ms, proc.returncode == 0)
+        return proc.returncode, raw
+    except Exception as e:
+        return 1, str(e)
+
+
+def _autopilot_pipeline(alvo: str, q: queue.Queue):
+    """Pipeline PTES completo com IA decidindo parâmetros entre fases."""
+    def emit(tipo, **kwargs):
+        q.put({"type": tipo, **kwargs})
+
+    def run_phase(label: str, ferramenta: str, opts: dict):
+        emit("phase_start", phase=label, ferramenta=ferramenta, opts=opts)
+        try:
+            comando = _build_command(ferramenta, alvo, opts)
+            emit("cmd", data=" ".join(comando))
+        except ValueError as e:
+            emit("error", data=str(e))
+            return None
+
+        import time, select as _sel
+        import subprocess
+        raw_lines = []
+        inicio = time.time()
+        try:
+            proc = subprocess.Popen(
+                ["stdbuf", "-oL", "-eL"] + _build_command(ferramenta, alvo, opts),
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
+            )
+            while True:
+                fds = _sel.select([proc.stdout, proc.stderr], [], [], 1.0)[0]
+                for fd in fds:
+                    linha = fd.readline()
+                    if linha:
+                        texto = linha.decode("utf-8", errors="replace").rstrip("\n")
+                        raw_lines.append(texto)
+                        emit("line", data=texto)
+                if proc.poll() is not None:
+                    for fd in [proc.stdout, proc.stderr]:
+                        for linha in fd:
+                            texto = linha.decode("utf-8", errors="replace").rstrip("\n")
+                            if texto:
+                                raw_lines.append(texto)
+                                emit("line", data=texto)
+                    break
+            proc.wait()
+            duracao_ms = int((time.time() - inicio) * 1000)
+            raw = "\n".join(raw_lines)
+            storage.salvar(alvo, ferramenta, raw, parametros={**opts, "via": "autopilot"}, raw_output=raw)
+            storage.salvar_metrica(ferramenta, alvo, proc.returncode, duracao_ms, proc.returncode == 0)
+            scan_id = storage.ultimo_id(alvo, ferramenta)
+            emit("phase_done", phase=label, ferramenta=ferramenta, scan_id=scan_id, duracao_ms=duracao_ms, exit_code=proc.returncode)
+            return raw
+        except FileNotFoundError:
+            emit("error", data=f"Ferramenta '{ferramenta}' não encontrada.")
+            return None
+        except Exception as e:
+            emit("error", data=str(e))
+            return None
+
+    try:
+        # ── Fase 1: Descoberta passiva de subdomínios ──────────────────────
+        emit("phase_header", text="Fase 1 — Reconhecimento Passivo (subfinder)")
+        sf_out = run_phase("Reconhecimento Passivo", "subfinder", {}) or ""
+        subdomains = [s.strip() for s in sf_out.splitlines() if s.strip() and alvo in s]
+        emit("info", data=f"Subdomínios encontrados: {len(subdomains)}")
+
+        # ── Fase 2: Port scan rápido (top-1000) ───────────────────────────
+        emit("phase_header", text="Fase 2 — Port Scan (nmap top-1000)")
+        nmap_quick = run_phase("Port Scan Rápido", "nmap", {"argumentos": "-sT --top-ports 1000"}) or ""
+
+        # ── Fase 3: IA decide quais portas detalhar ────────────────────────
+        emit("phase_header", text="Fase 3 — Análise IA + Service Detection")
+        emit("ai_thinking", data="IA analisando portas abertas para definir próxima fase…")
+        open_ports = _extract_open_ports(nmap_quick)
+        if open_ports:
+            ai_params = _ai_decide_next_phase("nmap top-1000", nmap_quick, alvo)
+            nmap_args = ai_params.get("argumentos", f"-sV -sC -p {','.join(open_ports)}")
+            emit("ai_decision", data=f"IA escolheu: nmap {nmap_args}")
+        else:
+            nmap_args = "-sV -sC --top-ports 100"
+            emit("ai_decision", data=f"Sem portas identificadas — usando: nmap {nmap_args}")
+        nmap_sv = run_phase("Service Detection", "nmap", {"argumentos": nmap_args}) or ""
+
+        # ── Fase 4: Fingerprinting web ─────────────────────────────────────
+        emit("phase_header", text="Fase 4 — Fingerprinting Web (whatweb + headers)")
+        run_phase("WhatWeb", "whatweb", {"agressividade": 1})
+
+        # ── Fase 5: IA decide se há serviço web e qual protocolo ───────────
+        emit("phase_header", text="Fase 5 — Análise de Vulnerabilidades (nikto + nuclei)")
+        emit("ai_thinking", data="IA decidindo porta e protocolo para nikto/nuclei…")
+        http_ports = _extract_http_ports(nmap_sv) or _extract_http_ports(nmap_quick) or ["443"]
+        ai_nikto = _ai_decide_next_phase("service detection", nmap_sv, alvo)
+        porta_nikto = ai_nikto.get("porta", http_ports[0] if http_ports else "443")
+        use_ssl = str(porta_nikto) in ("443", "8443") or ai_nikto.get("ssl", False)
+        emit("ai_decision", data=f"IA escolheu: nikto na porta {porta_nikto} (SSL={use_ssl})")
+        run_phase("Nikto", "nikto", {"porta": str(porta_nikto), "ssl": "1" if use_ssl else ""})
+        run_phase("Nuclei", "nuclei", {"severidade": "critical,high,medium"})
+
+        # ── Fase 6: Directory enumeration em serviços web ──────────────────
+        emit("phase_header", text="Fase 6 — Enumeração de Diretórios (gobuster)")
+        proto = "https" if use_ssl else "http"
+        emit("ai_decision", data=f"IA escolheu: gobuster via {proto}://{alvo}:{porta_nikto}")
+        run_phase("Gobuster", "gobuster", {"protocolo": proto, "wordlist": "common", "threads": 20})
+
+        # ── Relatório final ────────────────────────────────────────────────
+        emit("phase_header", text="Pipeline PTES Concluído — Gerando Relatório IA")
+        emit("ai_thinking", data="LLM consolidando todos os resultados…")
+        scans = storage.historico(alvo, limite=10)
+        blocos = []
+        for s in scans:
+            conteudo = s.get("raw_output") or s.get("resultado") or ""
+            if conteudo:
+                blocos.append(f"=== {s['ferramenta'].upper()} ===\n{conteudo[:3000]}")
+        if blocos:
+            try:
+                from llm import criar_llm
+                llm = criar_llm("supervisor")
+                prompt = f"""Você é um especialista em pentest. Analise o pipeline PTES completo abaixo para "{alvo}" e produza um relatório consolidado com:
+1. Resumo Executivo
+2. Superfície de Ataque
+3. Vulnerabilidades (Crítico/Alto/Médio)
+4. Top 3 Vetores de Ataque
+5. Recomendações Imediatas
+
+RESULTADOS:
+{chr(10).join(blocos)}"""
+                resposta = llm.invoke(prompt)
+                analise = getattr(resposta, "content", str(resposta)).strip()
+                for s in scans:
+                    storage.salvar_llm_analysis(s["id"], analise)
+                emit("final_report", data=analise)
+            except Exception as e:
+                emit("info", data=f"Relatório IA falhou: {e}")
+
+        emit("done", message="Pipeline PTES completo.")
+
+    except Exception as e:
+        emit("error", data=f"Autopilot falhou: {e}")
+
+
+@app.route("/api/autopilot")
+def api_autopilot():
+    """SSE endpoint — executa o pipeline PTES completo com IA entre fases."""
+    alvo = request.args.get("alvo", "").strip()
+    if not alvo:
+        abort(400, "Parâmetro 'alvo' obrigatório.")
+    alvo_limpo = validar_alvo(alvo)
+    if not alvo_limpo:
+        abort(400, "Alvo inválido. Use domínio ou IP.")
+
+    q = queue.Queue()
+    t = threading.Thread(target=_autopilot_pipeline, args=(alvo_limpo, q), daemon=True)
+    t.start()
+
+    def generate():
+        while True:
+            try:
+                msg = q.get(timeout=300)
+                yield f"data: {json.dumps(msg)}\n\n"
+                if msg["type"] in ("done", "error"):
+                    break
+            except queue.Empty:
+                yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

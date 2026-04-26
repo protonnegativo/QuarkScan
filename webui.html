@@ -96,11 +96,34 @@
     .run-row .field { display:flex; flex-direction:column; }
     .run-row .field.flex1 { flex:1; min-width:160px; }
     .run-opts { display:none; margin-top:8px; }
-    .run-opts.visible { display:flex; flex-wrap:wrap; gap:8px; }
-    .tool-grid { display:flex; gap:8px; flex-wrap:wrap; }
-    .tool-btn { padding:6px 14px; border-radius:var(--radius); font-size:12px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--bg3); color:var(--muted); transition:all .15s; }
+    .run-opts.visible { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; }
+    /* Categories */
+    .cat-section { margin-bottom:12px; }
+    .cat-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+    .tool-grid { display:flex; gap:6px; flex-wrap:wrap; }
+    .tool-btn { padding:5px 12px; border-radius:var(--radius); font-size:12px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--bg3); color:var(--muted); transition:all .15s; }
     .tool-btn:hover { background:var(--bg); color:var(--text); }
     .tool-btn.selected { color:var(--accent); border-color:var(--accent); background:rgba(88,166,255,.1); }
+    /* Presets */
+    .preset-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+    .preset-btn { padding:3px 10px; border-radius:10px; font-size:11px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--bg); color:var(--muted); transition:all .15s; }
+    .preset-btn:hover { border-color:var(--accent); color:var(--accent); }
+    .preset-btn.active { background:rgba(88,166,255,.12); border-color:var(--accent); color:var(--accent); }
+    /* Autopilot */
+    .autopilot-bar { display:flex; align-items:center; gap:12px; padding:12px 14px; background:rgba(188,140,255,.07); border:1px solid rgba(188,140,255,.25); border-radius:var(--radius); margin-bottom:14px; }
+    .autopilot-bar .ap-info { flex:1; font-size:13px; }
+    .autopilot-bar .ap-info strong { color:var(--purple); }
+    .toggle { position:relative; display:inline-block; width:42px; height:22px; flex-shrink:0; }
+    .toggle input { opacity:0; width:0; height:0; }
+    .toggle-slider { position:absolute; cursor:pointer; inset:0; background:var(--bg3); border:1px solid var(--border); border-radius:11px; transition:.2s; }
+    .toggle-slider:before { content:''; position:absolute; height:16px; width:16px; left:2px; top:2px; background:var(--muted); border-radius:50%; transition:.2s; }
+    .toggle input:checked + .toggle-slider { background:rgba(188,140,255,.3); border-color:var(--purple); }
+    .toggle input:checked + .toggle-slider:before { transform:translateX(20px); background:var(--purple); }
+    /* Phase headers in terminal */
+    .line.phase { color:var(--purple); font-weight:700; }
+    .line.ai-think { color:var(--yellow); font-style:italic; }
+    .line.ai-dec { color:var(--green); }
+    .line.report { color:var(--accent); white-space:pre-wrap; }
 
     /* Terminal */
     .terminal-wrap { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
@@ -201,26 +224,92 @@
       <!-- PAGE: Executar Scan -->
       <div class="page active" id="page-run">
 
-        <!-- Painel de configuração -->
-        <div class="run-panel">
-          <h3>🎯 Novo Scan</h3>
-          <div class="run-row">
-            <div class="field flex1">
-              <label>Alvo (domínio ou IP)</label>
-              <input id="run-alvo" type="text" placeholder="exemplo.com ou 192.168.1.1" />
+        <!-- Modo Autônomo -->
+        <div class="autopilot-bar">
+          <label class="toggle"><input type="checkbox" id="autopilot-toggle" onchange="toggleAutopilot()" /><span class="toggle-slider"></span></label>
+          <div class="ap-info">
+            <strong>Modo Autônomo (PTES)</strong>
+            <span id="ap-desc" style="color:var(--muted);font-size:12px;display:block;">Desativado — selecione uma ferramenta abaixo para scan manual.</span>
+          </div>
+          <button class="primary" id="btn-run-auto" onclick="runAutopilot()" style="display:none;">⚡ Iniciar Pipeline</button>
+        </div>
+
+        <!-- Alvo (sempre visível) -->
+        <div style="margin-bottom:10px;">
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">Alvo (domínio ou IP)</label>
+          <input id="run-alvo" type="text" placeholder="exemplo.com ou 192.168.1.1" style="width:100%;max-width:480px;" />
+        </div>
+
+        <!-- Painel de configuração manual -->
+        <div class="run-panel" id="manual-panel">
+          <h3>🎯 Configurar Scan</h3>
+
+          <!-- Categorias de ferramentas -->
+          <div class="cat-section">
+            <div class="cat-label"><span style="color:var(--orange)">◆</span> Reconhecimento Passivo</div>
+            <div class="tool-grid">
+              <div class="tool-btn" data-tool="subfinder" onclick="selectTool(this)">subfinder</div>
+            </div>
+          </div>
+          <div class="cat-section">
+            <div class="cat-label"><span style="color:var(--accent)">◆</span> Reconhecimento Ativo</div>
+            <div class="tool-grid">
+              <div class="tool-btn selected" data-tool="nmap" onclick="selectTool(this)">nmap</div>
+              <div class="tool-btn" data-tool="whatweb" onclick="selectTool(this)">whatweb</div>
+            </div>
+          </div>
+          <div class="cat-section">
+            <div class="cat-label"><span style="color:var(--yellow)">◆</span> Enumeração</div>
+            <div class="tool-grid">
+              <div class="tool-btn" data-tool="gobuster" onclick="selectTool(this)">gobuster</div>
+              <div class="tool-btn" data-tool="nikto" onclick="selectTool(this)">nikto</div>
+            </div>
+          </div>
+          <div class="cat-section">
+            <div class="cat-label"><span style="color:var(--red)">◆</span> Análise de Vulnerabilidades</div>
+            <div class="tool-grid">
+              <div class="tool-btn" data-tool="nuclei" onclick="selectTool(this)">nuclei</div>
             </div>
           </div>
 
-          <div style="margin-bottom:8px;">
-            <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;">Ferramenta</label>
-            <div class="tool-grid" id="tool-grid">
-              <div class="tool-btn selected" data-tool="nmap" onclick="selectTool(this)">nmap</div>
-              <div class="tool-btn" data-tool="gobuster" onclick="selectTool(this)">gobuster</div>
-              <div class="tool-btn" data-tool="nikto" onclick="selectTool(this)">nikto</div>
-              <div class="tool-btn" data-tool="nuclei" onclick="selectTool(this)">nuclei</div>
-              <div class="tool-btn" data-tool="whatweb" onclick="selectTool(this)">whatweb</div>
-              <div class="tool-btn" data-tool="subfinder" onclick="selectTool(this)">subfinder</div>
-            </div>
+          <!-- Presets por ferramenta -->
+          <div id="presets-nmap" class="preset-row" style="margin-top:4px;">
+            <span style="font-size:11px;color:var(--muted);align-self:center;">Preset:</span>
+            <div class="preset-btn active" onclick="applyPreset('nmap','quick',this)" data-args="-sT --top-ports 1000">Quick Scan</div>
+            <div class="preset-btn" onclick="applyPreset('nmap','full',this)" data-args="-sT -p-">Full Ports</div>
+            <div class="preset-btn" onclick="applyPreset('nmap','service',this)" data-args="-sV -sC --top-ports 1000">Service Detection</div>
+            <div class="preset-btn" onclick="applyPreset('nmap','vuln',this)" data-args="-sV --script vuln --top-ports 100">Vuln Scan</div>
+            <div class="preset-btn" onclick="applyPreset('nmap','stealth',this)" data-args="-sS -T2 --top-ports 500">Stealth</div>
+          </div>
+          <div id="presets-gobuster" class="preset-row" style="display:none;">
+            <span style="font-size:11px;color:var(--muted);align-self:center;">Preset:</span>
+            <div class="preset-btn active" onclick="applyPreset('gobuster','quick',this)">Quick (common)</div>
+            <div class="preset-btn" onclick="applyPreset('gobuster','medium',this)">Medium (raft-30k)</div>
+            <div class="preset-btn" onclick="applyPreset('gobuster','php',this)">PHP App</div>
+            <div class="preset-btn" onclick="applyPreset('gobuster','api',this)">API Endpoints</div>
+          </div>
+          <div id="presets-nikto" class="preset-row" style="display:none;">
+            <span style="font-size:11px;color:var(--muted);align-self:center;">Preset:</span>
+            <div class="preset-btn active" onclick="applyPreset('nikto','https',this)">HTTPS 443</div>
+            <div class="preset-btn" onclick="applyPreset('nikto','http',this)">HTTP 80</div>
+            <div class="preset-btn" onclick="applyPreset('nikto','alt',this)">Alt Port 8080</div>
+          </div>
+          <div id="presets-nuclei" class="preset-row" style="display:none;">
+            <span style="font-size:11px;color:var(--muted);align-self:center;">Preset:</span>
+            <div class="preset-btn active" onclick="applyPreset('nuclei','critical',this)">Critical+High</div>
+            <div class="preset-btn" onclick="applyPreset('nuclei','all',this)">All Severities</div>
+            <div class="preset-btn" onclick="applyPreset('nuclei','cve',this)">CVEs only</div>
+            <div class="preset-btn" onclick="applyPreset('nuclei','exposure',this)">Exposures</div>
+          </div>
+          <div id="presets-whatweb" class="preset-row" style="display:none;">
+            <span style="font-size:11px;color:var(--muted);align-self:center;">Preset:</span>
+            <div class="preset-btn active" onclick="applyPreset('whatweb','passive',this)">Passivo (1)</div>
+            <div class="preset-btn" onclick="applyPreset('whatweb','active',this)">Ativo (3)</div>
+          </div>
+          <div id="presets-subfinder" class="preset-row" style="display:none;">
+            <span style="font-size:11px;color:var(--muted);align-self:center;">Preset:</span>
+            <div class="preset-btn active" onclick="applyPreset('subfinder','standard',this)">Padrão</div>
+            <div class="preset-btn" onclick="applyPreset('subfinder','recursive',this)">Recursivo</div>
           </div>
 
           <!-- Opções por ferramenta -->
@@ -262,7 +351,7 @@
           <div id="opts-nuclei" class="run-opts">
             <div class="field">
               <label>Severidade</label>
-              <input id="nuc-sev" value="critical,high,medium" style="width:200px;" />
+              <input id="nuc-sev" value="critical,high" style="width:200px;" />
             </div>
             <div class="field">
               <label>Tags (opcional)</label>
@@ -580,6 +669,152 @@ function selectTool(el) {
   document.querySelectorAll('.run-opts').forEach(o => o.classList.remove('visible'));
   const optEl = document.getElementById(`opts-${currentTool}`);
   if (optEl) optEl.classList.add('visible');
+  // Show matching preset row
+  document.querySelectorAll('.preset-row').forEach(r => r.style.display = 'none');
+  const pr = document.getElementById(`presets-${currentTool}`);
+  if (pr) pr.style.display = 'flex';
+}
+
+// ── Presets ────────────────────────────────────────────────────────────────
+const PRESETS = {
+  nmap: {
+    quick:   {argumentos: '-sT --top-ports 1000'},
+    full:    {argumentos: '-sT -p-'},
+    service: {argumentos: '-sV -sC --top-ports 1000'},
+    vuln:    {argumentos: '-sV --script vuln --top-ports 100'},
+    stealth: {argumentos: '-sS -T2 --top-ports 500'},
+  },
+  gobuster: {
+    quick:  {wordlist: 'common', protocolo: 'https', threads: 20},
+    medium: {wordlist: 'medium', protocolo: 'https', threads: 30},
+    php:    {wordlist: 'common', protocolo: 'https', extensoes: 'php,html,txt', threads: 20},
+    api:    {wordlist: 'common', protocolo: 'https', extensoes: 'json,xml', threads: 20},
+  },
+  nikto: {
+    https: {porta: '443', ssl: true},
+    http:  {porta: '80',  ssl: false},
+    alt:   {porta: '8080', ssl: false},
+  },
+  nuclei: {
+    critical:  {severidade: 'critical,high'},
+    all:       {severidade: 'critical,high,medium,low'},
+    cve:       {severidade: 'critical,high,medium', tags: 'cve'},
+    exposure:  {severidade: 'medium,low', tags: 'exposure,config'},
+  },
+  whatweb: {
+    passive: {agressividade: 1},
+    active:  {agressividade: 3},
+  },
+  subfinder: {
+    standard:  {recursivo: false},
+    recursive: {recursivo: true},
+  },
+};
+
+function applyPreset(tool, name, el) {
+  if (tool !== currentTool) return;
+  document.querySelectorAll(`#presets-${tool} .preset-btn`).forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  const p = PRESETS[tool]?.[name];
+  if (!p) return;
+  if (tool === 'nmap' && p.argumentos) document.getElementById('nmap-args').value = p.argumentos;
+  if (tool === 'gobuster') {
+    if (p.wordlist)  document.getElementById('gob-wl').value = p.wordlist;
+    if (p.protocolo) document.getElementById('gob-proto').value = p.protocolo;
+    if (p.extensoes !== undefined) document.getElementById('gob-ext').value = p.extensoes || '';
+    if (p.threads)   document.getElementById('gob-threads').value = p.threads;
+  }
+  if (tool === 'nikto') {
+    if (p.porta !== undefined) document.getElementById('nikto-porta').value = p.porta;
+    if (p.ssl   !== undefined) document.getElementById('nikto-ssl').checked = p.ssl;
+  }
+  if (tool === 'nuclei') {
+    if (p.severidade) document.getElementById('nuc-sev').value = p.severidade;
+    if (p.tags !== undefined) document.getElementById('nuc-tags').value = p.tags || '';
+  }
+  if (tool === 'whatweb' && p.agressividade) document.getElementById('ww-nivel').value = p.agressividade;
+  if (tool === 'subfinder' && p.recursivo !== undefined) document.getElementById('sf-rec').checked = p.recursivo;
+}
+
+// ── Autopilot ──────────────────────────────────────────────────────────────
+let autopilotActive = false;
+
+function toggleAutopilot() {
+  autopilotActive = document.getElementById('autopilot-toggle').checked;
+  const desc    = document.getElementById('ap-desc');
+  const panel   = document.getElementById('manual-panel');
+  const btnAuto = document.getElementById('btn-run-auto');
+  if (autopilotActive) {
+    desc.textContent = 'Ativado — pipeline PTES: subfinder → nmap → whatweb → nikto → nuclei → gobuster → Relatório IA';
+    desc.style.color = 'var(--purple)';
+    panel.style.opacity = '0.4';
+    panel.style.pointerEvents = 'none';
+    btnAuto.style.display = 'inline-block';
+  } else {
+    desc.textContent = 'Desativado — selecione uma ferramenta abaixo para scan manual.';
+    desc.style.color = 'var(--muted)';
+    panel.style.opacity = '1';
+    panel.style.pointerEvents = '';
+    btnAuto.style.display = 'none';
+  }
+}
+
+function runAutopilot() {
+  const alvo = document.getElementById('run-alvo').value.trim();
+  if (!alvo) { alert('Informe o alvo.'); return; }
+
+  if (activeSSE) { activeSSE.close(); activeSSE = null; }
+  lastRunAlvo = alvo;
+
+  document.getElementById('btn-run-auto').disabled = true;
+  document.getElementById('analyze-bar').style.display = 'none';
+  document.getElementById('ai-result-wrap').style.display = 'none';
+
+  clearTerminal();
+  setTermStatus('running');
+  document.getElementById('term-title').textContent = `[AUTOPILOT] PTES → ${alvo}`;
+
+  const sse = new EventSource(`/api/autopilot?alvo=${encodeURIComponent(alvo)}`);
+  activeSSE = sse;
+
+  sse.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    switch (msg.type) {
+      case 'phase_header': termLine(`\n══ ${msg.text} ══`, 'phase'); break;
+      case 'phase_start':  termLine(`▶ ${msg.ferramenta}`, 'cmd'); break;
+      case 'cmd':          termLine(`$ ${msg.data}`, 'cmd'); break;
+      case 'line':         termLine(msg.data, 'out'); break;
+      case 'ai_thinking':  termLine(`🤔 ${msg.data}`, 'ai-think'); break;
+      case 'ai_decision':  termLine(`✅ ${msg.data}`, 'ai-dec'); break;
+      case 'info':         termLine(`ℹ ${msg.data}`, 'info'); break;
+      case 'phase_done':   termLine(`✓ ${msg.ferramenta} concluído em ${(msg.duracao_ms/1000).toFixed(1)}s — scan #${msg.scan_id}`, 'ok'); break;
+      case 'final_report':
+        document.getElementById('ai-result-wrap').style.display = 'block';
+        document.getElementById('ai-result-text').textContent = msg.data;
+        document.getElementById('ai-dot').className = 'status-dot done';
+        break;
+      case 'done':
+        termLine('\n⚡ Pipeline PTES concluído.', 'ok');
+        setTermStatus('done');
+        document.getElementById('btn-run-auto').disabled = false;
+        document.getElementById('analyze-bar').style.display = 'flex';
+        sse.close(); activeSSE = null;
+        loadAlvos(); loadStats(); loadDashScans();
+        break;
+      case 'error':
+        termLine(`\n✗ Erro: ${msg.data}`, 'err');
+        setTermStatus('error');
+        document.getElementById('btn-run-auto').disabled = false;
+        sse.close(); activeSSE = null;
+        break;
+    }
+  };
+
+  sse.onerror = () => {
+    if (activeSSE) { termLine('\n✗ Conexão SSE perdida.', 'err'); setTermStatus('error'); }
+    document.getElementById('btn-run-auto').disabled = false;
+    sse.close(); activeSSE = null;
+  };
 }
 
 // ── Run scan ───────────────────────────────────────────────────────────────
@@ -767,6 +1002,11 @@ function switchTab(name, el) {
     document.getElementById(`tab-${t}`).style.display = (t===name) ? 'block' : 'none'
   );
 }
+
+// Show preset row for the initially selected tool
+document.querySelectorAll('.preset-row').forEach(r => r.style.display = 'none');
+const initPr = document.getElementById(`presets-${currentTool}`);
+if (initPr) initPr.style.display = 'flex';
 
 init();
 </script>
