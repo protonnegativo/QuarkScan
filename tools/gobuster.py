@@ -145,7 +145,7 @@ def executar_gobuster(
             saida = "Nenhum diretório encontrado com esta wordlist."
         storage.salvar(alvo_limpo, "gobuster", saida, {
             "wordlist": wordlist, "extensoes": extensoes, "perfil": perfil_navegador,
-        })
+        }, raw_output=res.stdout.strip())
         storage.salvar_metrica("gobuster", alvo_limpo, res.exit_code, res.duracao_ms, res.sucesso)
         if os.environ.get("QUARKSCAN_RAW"):
             print(f"\n[RAW gobuster]\n{saida}\n[/RAW]\n")

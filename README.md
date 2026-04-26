@@ -174,6 +174,30 @@ Com a flag ativa, o terminal exibe o output bruto entre marcadores `[RAW ferrame
 
 ---
 
+### Web UI — Dashboard de Scans
+
+Visualize todos os scans, compare output bruto vs análise da IA e acompanhe vulnerabilidades por alvo no navegador:
+
+```bash
+./start_agent.sh --webui
+# Abre em: http://localhost:5000
+```
+
+Porta customizada:
+```bash
+./start_agent.sh --webui --port=8080
+```
+
+O dashboard oferece:
+- **Todos os Scans** — lista paginada com filtro por alvo e ferramenta
+- **Output Bruto vs Análise IA** — três abas por scan: Resultado, Output Bruto (exato da ferramenta) e Análise IA
+- **Vulnerabilidades** — tabela por alvo com severidade, status e histórico temporal
+- **Stats** — totais de scans, alvos e vulnerabilidades no topo
+
+> A Web UI lê o mesmo banco `data/resultados.db` usado pelo agente — não requer Docker, apenas `flask` instalado (`pip3 install flask`).
+
+---
+
 ### Pipeline autônomo (LangGraph StateGraph)
 
 Execute todas as fases de reconhecimento em sequência com um único comando. O pipeline é construído como um **grafo de estado** com fallback automático e checkpointing.
@@ -373,33 +397,18 @@ As seções seguem as fases de um engajamento real. Itens dentro de cada fase es
 
 ### Fase 6 — Interface Web Interativa
 
-*Solução para problemas de auditoria (alucinações da IA) e usabilidade (repetição de scans).*
+*Dashboard visual para auditoria de scans, comparação raw vs IA e tracking de vulnerabilidades.*
 
-#### **Problemas Identificados**
-
-1. **Alucinações da IA** — IA gera respostas que não correspondem ao output real das ferramentas; banco salva resposta processada, dificultando auditoria
-2. **Repetição de Scans Idênticos** — usuários re-executam scans iguais por falta de visão clara do histórico
-
-#### **Solução: Dashboard Web com Separação Output Bruto × Análise**
-
-| Recurso | Descrição |
+| Item | Descrição |
 |---|---|
-| **Dashboard por Projeto** | Organização de alvos em projetos (ex: "Fase 1 - Recon", "Pentest ClienteX"); visão clara de scans já executados |
-| **Output Bruto vs Análise IA** | Duas abas: (1) output exato das ferramentas (confiável), (2) análise da IA (opcional); auditoria fácil do que realmente foi encontrado |
-| **Seleção Granular de Scans** | Interface visual para escolher quais scans executar: Nmap, WhatWeb, Subfinder, Gobuster, Nikto, Nuclei, Headers, Histórico |
-| **Re-análise Sob Demanda** | Batch-analyze múltiplos outputs antigos sem re-scan (economiza tokens); LLM processa vários resultados em uma única chamada |
-| **Checkbox "Salvar sem Análise"** | Scans exploratórios salvam output bruto sem LLM; depois seleciona múltiplos e analisa tudo junto |
-| **Relatórios Exportáveis** | Markdown/HTML estruturados por projeto; comparação entre engajamentos do mesmo alvo em períodos diferentes |
-
-#### **Benefícios**
-
-- **Confiança**: Separação clara entre o que a ferramenta realmente encontrou vs. interpretação da IA
-- **Visibilidade**: Dashboard visual evita repetição de scans iguais
-- **Economia**: Batch analysis reduz gastos com tokens (não roda LLM por output)
-- **Organização**: Projetos agrupam findings relacionados; exportação em formatos estruturados
-- **Não-Breaking**: Camada adicional; modo conversacional continua funcionando
-
-**Status**: Roadmap — implementação planejada após consolidação de Fase 5.
+| ~~**Dashboard Web**~~ | ✓ Implementado — `./start_agent.sh --webui` → `http://localhost:5000` |
+| ~~**Output Bruto separado**~~ | ✓ Implementado — coluna `raw_output` no banco; todos os tools salvam stdout bruto |
+| ~~**Separação Raw × Análise IA**~~ | ✓ Implementado — três abas por scan: Resultado / Output Bruto / Análise IA |
+| ~~**Histórico visual por alvo**~~ | ✓ Implementado — sidebar com alvos, filtro por ferramenta, paginação |
+| ~~**Vulnerabilidades por alvo**~~ | ✓ Implementado — aba dedicada com severidade, status e histórico temporal |
+| **Re-análise batch com IA** | Selecionar múltiplos outputs e rodar LLM em lote — economiza tokens vs análise por scan |
+| **Organização por Projetos** | Agrupar alvos em projetos/engajamentos (ex: "Pentest ClienteX"); exportar relatório do projeto |
+| **Execução de scans pela UI** | Disparar scans diretamente pelo browser sem precisar do terminal |
 
 ### Reporting
 

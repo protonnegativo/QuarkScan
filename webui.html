@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuarkScan — Web UI</title>
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #0d1117;
+      --bg2:      #161b22;
+      --bg3:      #21262d;
+      --border:   #30363d;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --accent:   #58a6ff;
+      --green:    #3fb950;
+      --yellow:   #d29922;
+      --orange:   #f0883e;
+      --red:      #f85149;
+      --purple:   #bc8cff;
+      --radius:   6px;
+      --font:     'Segoe UI', system-ui, sans-serif;
+      --mono:     'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; }
+
+    /* ── Layout ── */
+    .app { display: flex; height: 100vh; overflow: hidden; }
+    .sidebar { width: 240px; min-width: 200px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar { height: 52px; background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; gap: 12px; flex-shrink: 0; }
+    .content { flex: 1; overflow-y: auto; padding: 20px; }
+
+    /* ── Sidebar ── */
+    .sidebar-header { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+    .logo { font-size: 16px; font-weight: 700; color: var(--accent); letter-spacing: 0.5px; }
+    .logo span { color: var(--muted); font-weight: 400; font-size: 12px; display: block; margin-top: 2px; }
+    .sidebar-section { padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .sidebar-label { padding: 6px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
+    .sidebar-item { padding: 7px 16px; cursor: pointer; border-left: 3px solid transparent; transition: all 0.15s; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-item:hover { background: var(--bg3); color: var(--text); }
+    .sidebar-item.active { background: rgba(88,166,255,0.1); border-left-color: var(--accent); color: var(--accent); }
+    .sidebar-item .badge { margin-left: auto; font-size: 11px; background: var(--bg3); padding: 1px 6px; border-radius: 10px; flex-shrink: 0; color: var(--muted); }
+    .sidebar-scroll { flex: 1; overflow-y: auto; }
+
+    /* ── Stats bar ── */
+    .stats-bar { display: flex; gap: 12px; }
+    .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; flex: 1; min-width: 0; }
+    .stat-card .num { font-size: 24px; font-weight: 700; line-height: 1.2; }
+    .stat-card .lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .stat-card.red .num { color: var(--red); }
+    .stat-card.orange .num { color: var(--orange); }
+    .stat-card.green .num { color: var(--green); }
+    .stat-card.blue .num { color: var(--accent); }
+
+    /* ── Toolbar ── */
+    .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .topbar-title { font-size: 15px; font-weight: 600; flex: 1; }
+    input, select { background: var(--bg3); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); padding: 6px 10px; font-size: 13px; font-family: var(--font); outline: none; }
+    input:focus, select:focus { border-color: var(--accent); }
+    input::placeholder { color: var(--muted); }
+    button { background: var(--bg3); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); padding: 6px 12px; font-size: 13px; cursor: pointer; transition: background 0.15s; font-family: var(--font); }
+    button:hover { background: var(--border); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #0d1117; font-weight: 600; }
+    button.primary:hover { background: #79b8ff; }
+
+    /* ── Scan list ── */
+    .section-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin: 20px 0 10px; }
+    .scan-table { width: 100%; border-collapse: collapse; }
+    .scan-table th { text-align: left; padding: 8px 10px; font-size: 12px; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.5px; }
+    .scan-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+    .scan-table tr:hover td { background: var(--bg2); cursor: pointer; }
+    .scan-table tr.selected td { background: rgba(88,166,255,0.07); }
+
+    /* ── Badges ── */
+    .badge-tool { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: var(--bg3); border: 1px solid var(--border); }
+    .badge-tool.nmap      { color: #58a6ff; border-color: rgba(88,166,255,0.3); }
+    .badge-tool.gobuster  { color: #3fb950; border-color: rgba(63,185,80,0.3); }
+    .badge-tool.nikto     { color: #f85149; border-color: rgba(248,81,73,0.3); }
+    .badge-tool.nuclei    { color: #bc8cff; border-color: rgba(188,140,255,0.3); }
+    .badge-tool.whatweb   { color: #d29922; border-color: rgba(210,153,34,0.3); }
+    .badge-tool.subfinder { color: #f0883e; border-color: rgba(240,136,62,0.3); }
+    .badge-tool.headers   { color: #39d353; border-color: rgba(57,211,83,0.3); }
+    .badge-tool.bypass_analyst { color: #e3b341; border-color: rgba(227,179,65,0.3); }
+
+    .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+    .pill.has-raw { background: rgba(63,185,80,0.15); color: var(--green); }
+    .pill.no-raw  { background: var(--bg3); color: var(--muted); }
+    .pill.has-ai  { background: rgba(188,140,255,0.15); color: var(--purple); }
+    .pill.no-ai   { background: var(--bg3); color: var(--muted); }
+
+    /* ── Detail panel ── */
+    .detail-panel { position: fixed; top: 0; right: 0; width: 55vw; height: 100vh; background: var(--bg2); border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 100; transform: translateX(100%); transition: transform 0.25s ease; }
+    .detail-panel.open { transform: translateX(0); }
+    .detail-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .detail-header h2 { font-size: 15px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .detail-close { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; padding: 0 4px; line-height: 1; }
+    .detail-close:hover { color: var(--text); background: none; }
+    .detail-meta { padding: 10px 18px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; flex-wrap: wrap; flex-shrink: 0; font-size: 12px; color: var(--muted); }
+    .detail-meta span { display: flex; align-items: center; gap: 4px; }
+    .detail-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; padding: 0 18px; gap: 0; }
+    .detail-tab { padding: 10px 14px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; }
+    .detail-tab:hover { color: var(--text); }
+    .detail-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .detail-body { flex: 1; overflow-y: auto; padding: 16px 18px; }
+    pre.output { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; font-family: var(--mono); font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; color: var(--text); overflow-x: auto; }
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
+    .empty-state .icon { font-size: 32px; margin-bottom: 8px; }
+    .empty-state p { font-size: 13px; }
+
+    /* ── Pagination ── */
+    .pagination { display: flex; gap: 6px; align-items: center; justify-content: flex-end; margin-top: 14px; }
+    .pagination button { padding: 5px 10px; font-size: 12px; }
+    .pagination .page-info { font-size: 12px; color: var(--muted); }
+
+    /* ── Vuln table ── */
+    .sev { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .sev.critical { background: rgba(248,81,73,0.2); color: var(--red); }
+    .sev.high     { background: rgba(240,136,62,0.2); color: var(--orange); }
+    .sev.medium   { background: rgba(210,153,34,0.2); color: var(--yellow); }
+    .sev.low      { background: rgba(63,185,80,0.15); color: var(--green); }
+    .sev.unknown  { background: var(--bg3); color: var(--muted); }
+
+    /* ── Overlay ── */
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 99; display: none; }
+    .overlay.open { display: block; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    /* ── Loader ── */
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Filter bar ── */
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+    .filter-bar input { flex: 1; min-width: 180px; }
+
+    /* ── Tab pages ── */
+    .page { display: none; }
+    .page.active { display: block; }
+  </style>
+</head>
+<body>
+<div class="overlay" id="overlay" onclick="closeDetail()"></div>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">⚡ QuarkScan<span>Web UI v1.0</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Navegação</div>
+      <div class="sidebar-item active" onclick="showPage('dashboard', this)">
+        <span>📊</span> Dashboard
+      </div>
+      <div class="sidebar-item" onclick="showPage('scans', this)">
+        <span>🔍</span> Todos os Scans
+      </div>
+      <div class="sidebar-item" onclick="showPage('vulns', this)">
+        <span>🚨</span> Vulnerabilidades
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Alvos</div>
+      <div class="sidebar-scroll" id="alvos-list">
+        <div style="padding:8px 16px;color:var(--muted);font-size:12px;">Carregando…</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="page-title">Dashboard</div>
+      <button onclick="reloadAll()" title="Atualizar dados">↻ Atualizar</button>
+    </div>
+    <div class="content">
+
+      <!-- PAGE: Dashboard -->
+      <div class="page active" id="page-dashboard">
+        <div class="stats-bar" id="stats-bar">
+          <div class="stat-card blue"><div class="num" id="s-scans">—</div><div class="lbl">Scans realizados</div></div>
+          <div class="stat-card green"><div class="num" id="s-alvos">—</div><div class="lbl">Alvos únicos</div></div>
+          <div class="stat-card orange"><div class="num" id="s-vulns">—</div><div class="lbl">Vulnerabilidades</div></div>
+          <div class="stat-card red"><div class="num" id="s-criticas">—</div><div class="lbl">Críticas / Altas</div></div>
+        </div>
+
+        <div class="section-title" style="margin-top:24px;">Últimos 20 Scans</div>
+        <table class="scan-table" id="dash-table">
+          <thead><tr>
+            <th>Alvo</th><th>Ferramenta</th><th>Data</th><th>Raw</th><th>Análise IA</th>
+          </tr></thead>
+          <tbody id="dash-tbody"><tr><td colspan="5" style="color:var(--muted);padding:20px;text-align:center;"><span class="spinner"></span></td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- PAGE: Todos os Scans -->
+      <div class="page" id="page-scans">
+        <div class="filter-bar">
+          <input type="text" id="filter-alvo" placeholder="Filtrar por alvo…" oninput="debounceLoadScans()" />
+          <select id="filter-tool" onchange="loadScans()">
+            <option value="">Todas as ferramentas</option>
+          </select>
+          <span id="scan-count" style="color:var(--muted);font-size:12px;"></span>
+        </div>
+        <table class="scan-table" id="scans-table">
+          <thead><tr>
+            <th>#</th><th>Alvo</th><th>Ferramenta</th><th>Parâmetros</th><th>Data</th><th>Raw</th><th>Análise IA</th>
+          </tr></thead>
+          <tbody id="scans-tbody"><tr><td colspan="7" style="color:var(--muted);padding:20px;text-align:center;"><span class="spinner"></span></td></tr></tbody>
+        </table>
+        <div class="pagination" id="pagination"></div>
+      </div>
+
+      <!-- PAGE: Vulnerabilidades -->
+      <div class="page" id="page-vulns">
+        <div class="filter-bar">
+          <select id="vuln-alvo-select" onchange="loadVulns()">
+            <option value="">Selecione um alvo…</option>
+          </select>
+          <span id="vuln-count" style="color:var(--muted);font-size:12px;"></span>
+        </div>
+        <table class="scan-table" id="vulns-table">
+          <thead><tr>
+            <th>Subdomínio</th><th>Tipo</th><th>Identificador</th><th>Severidade</th><th>Status</th><th>Primeira vez</th><th>Última vez</th>
+          </tr></thead>
+          <tbody id="vulns-tbody">
+            <tr><td colspan="7" style="color:var(--muted);padding:20px;text-align:center;">Selecione um alvo acima.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div><!-- .content -->
+  </div><!-- .main -->
+</div><!-- .app -->
+
+<!-- Detail Panel -->
+<div class="detail-panel" id="detail-panel">
+  <div class="detail-header">
+    <h2 id="detail-title">—</h2>
+    <button class="detail-close" onclick="closeDetail()">✕</button>
+  </div>
+  <div class="detail-meta" id="detail-meta"></div>
+  <div class="detail-tabs" id="detail-tabs">
+    <div class="detail-tab active" onclick="switchTab('resultado', this)">Resultado</div>
+    <div class="detail-tab" id="tab-raw-btn" onclick="switchTab('raw', this)">Output Bruto</div>
+    <div class="detail-tab" id="tab-ai-btn" onclick="switchTab('ai', this)">Análise IA</div>
+  </div>
+  <div class="detail-body">
+    <div id="tab-resultado"><pre class="output" id="out-resultado">—</pre></div>
+    <div id="tab-raw" style="display:none">
+      <pre class="output" id="out-raw">—</pre>
+    </div>
+    <div id="tab-ai" style="display:none">
+      <pre class="output" id="out-ai">—</pre>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let currentPage = 'dashboard';
+let scansOffset = 0;
+let scansTotal = 0;
+const PAGE_SIZE = 50;
+let debounceTimer = null;
+let selectedAlvo = null;
+
+// ── Init ───────────────────────────────────────────────────────────────────
+async function init() {
+  await Promise.all([loadAlvos(), loadFerramentas(), loadStats(), loadDashScans()]);
+}
+
+// ── Utility ────────────────────────────────────────────────────────────────
+async function api(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+function ts(str) {
+  if (!str) return '—';
+  return str.replace('T', ' ').replace(/\.\d+$/, '');
+}
+
+function toolBadge(t) {
+  const cls = t.replace('_analyst','');
+  return `<span class="badge-tool ${cls}">${t}</span>`;
+}
+
+function rawPill(has) {
+  return has
+    ? `<span class="pill has-raw">✓ Raw</span>`
+    : `<span class="pill no-raw">— Raw</span>`;
+}
+
+function aiPill(has) {
+  return has
+    ? `<span class="pill has-ai">✓ IA</span>`
+    : `<span class="pill no-ai">— IA</span>`;
+}
+
+function sevBadge(s) {
+  return `<span class="sev ${s||'unknown'}">${s||'?'}</span>`;
+}
+
+function showPage(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+  document.getElementById(`page-${name}`).classList.add('active');
+  if (el) el.classList.add('active');
+  currentPage = name;
+  const titles = { dashboard: 'Dashboard', scans: 'Todos os Scans', vulns: 'Vulnerabilidades' };
+  document.getElementById('page-title').textContent = titles[name] || name;
+  if (name === 'scans') loadScans();
+}
+
+function reloadAll() {
+  loadAlvos();
+  loadFerramentas();
+  loadStats();
+  loadDashScans();
+  if (currentPage === 'scans') loadScans();
+  if (currentPage === 'vulns' && document.getElementById('vuln-alvo-select').value) loadVulns();
+}
+
+// ── Alvos ──────────────────────────────────────────────────────────────────
+async function loadAlvos() {
+  const list = document.getElementById('alvos-list');
+  try {
+    const alvos = await api('/api/alvos');
+    const vulnSelect = document.getElementById('vuln-alvo-select');
+
+    // Remove __bypass__ entries from sidebar/vuln select
+    const real = alvos.filter(a => !a.alvo.startsWith('__bypass__'));
+
+    list.innerHTML = real.map(a => `
+      <div class="sidebar-item" onclick="filterByAlvo('${a.alvo}', this)" title="${a.alvo}">
+        <span>🎯</span>
+        <span style="overflow:hidden;text-overflow:ellipsis">${a.alvo}</span>
+        <span class="badge">${a.total}</span>
+      </div>`).join('') || '<div style="padding:8px 16px;color:var(--muted);font-size:12px;">Nenhum alvo</div>';
+
+    vulnSelect.innerHTML = '<option value="">Selecione um alvo…</option>' +
+      real.map(a => `<option value="${a.alvo}">${a.alvo}</option>`).join('');
+  } catch (e) {
+    list.innerHTML = `<div style="padding:8px 16px;color:var(--red);font-size:12px;">Erro ao carregar</div>`;
+  }
+}
+
+function filterByAlvo(alvo, el) {
+  selectedAlvo = alvo;
+  showPage('scans', null);
+  // Highlight sidebar item
+  document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.getElementById('filter-alvo').value = alvo;
+  scansOffset = 0;
+  loadScans();
+}
+
+// ── Ferramentas ────────────────────────────────────────────────────────────
+async function loadFerramentas() {
+  try {
+    const tools = await api('/api/ferramentas');
+    const sel = document.getElementById('filter-tool');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Todas as ferramentas</option>' +
+      tools.map(t => `<option value="${t}" ${t===cur?'selected':''}>${t}</option>`).join('');
+  } catch {}
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const s = await api('/api/stats');
+    document.getElementById('s-scans').textContent = s.total_scans;
+    document.getElementById('s-alvos').textContent = s.total_alvos;
+    document.getElementById('s-vulns').textContent = s.total_vulns;
+    document.getElementById('s-criticas').textContent = `${s.vulns_criticas} / ${s.vulns_altas}`;
+  } catch {}
+}
+
+// ── Dashboard scans ────────────────────────────────────────────────────────
+async function loadDashScans() {
+  const tbody = document.getElementById('dash-tbody');
+  try {
+    const data = await api('/api/scans?limite=20&offset=0');
+    if (!data.scans.length) {
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon">🔍</div><p>Nenhum scan encontrado. Execute um scan via terminal.</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.scans.map(s => `
+      <tr onclick="openDetail(${s.id})">
+        <td>${s.alvo}</td>
+        <td>${toolBadge(s.ferramenta)}</td>
+        <td style="color:var(--muted)">${ts(s.timestamp)}</td>
+        <td>${rawPill(s.tem_raw)}</td>
+        <td>${aiPill(s.tem_analise)}</td>
+      </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--red)">Erro: ${e.message}</td></tr>`;
+  }
+}
+
+// ── Scans page ─────────────────────────────────────────────────────────────
+function debounceLoadScans() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => { scansOffset = 0; loadScans(); }, 300);
+}
+
+async function loadScans() {
+  const tbody = document.getElementById('scans-tbody');
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;"><span class="spinner"></span></td></tr>`;
+  const alvo = document.getElementById('filter-alvo').value.trim();
+  const tool = document.getElementById('filter-tool').value;
+  const params = new URLSearchParams({ limite: PAGE_SIZE, offset: scansOffset });
+  if (alvo) params.set('alvo', alvo);
+  if (tool) params.set('ferramenta', tool);
+  try {
+    const data = await api(`/api/scans?${params}`);
+    scansTotal = data.total;
+    document.getElementById('scan-count').textContent = `${data.total} scan(s) encontrado(s)`;
+    if (!data.scans.length) {
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">🔍</div><p>Nenhum scan corresponde ao filtro.</p></div></td></tr>`;
+      renderPagination();
+      return;
+    }
+    tbody.innerHTML = data.scans.map(s => {
+      const params = s.parametros ? JSON.parse(s.parametros) : {};
+      const paramStr = Object.entries(params).map(([k,v]) => `${k}=${JSON.stringify(v)}`).join(', ');
+      return `
+        <tr onclick="openDetail(${s.id})">
+          <td style="color:var(--muted);font-size:11px;">#${s.id}</td>
+          <td>${s.alvo}</td>
+          <td>${toolBadge(s.ferramenta)}</td>
+          <td style="color:var(--muted);font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${paramStr}">${paramStr||'—'}</td>
+          <td style="color:var(--muted)">${ts(s.timestamp)}</td>
+          <td>${rawPill(s.tem_raw)}</td>
+          <td>${aiPill(s.tem_analise)}</td>
+        </tr>`;
+    }).join('');
+    renderPagination();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--red)">Erro: ${e.message}</td></tr>`;
+  }
+}
+
+function renderPagination() {
+  const el = document.getElementById('pagination');
+  const pages = Math.ceil(scansTotal / PAGE_SIZE);
+  const cur = Math.floor(scansOffset / PAGE_SIZE) + 1;
+  if (pages <= 1) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <button ${cur===1?'disabled':''} onclick="changePage(${cur-2})">‹ Anterior</button>
+    <span class="page-info">Página ${cur} de ${pages}</span>
+    <button ${cur===pages?'disabled':''} onclick="changePage(${cur})">Próxima ›</button>`;
+}
+
+function changePage(pageIdx) {
+  scansOffset = pageIdx * PAGE_SIZE;
+  loadScans();
+  document.getElementById('page-scans').scrollTop = 0;
+}
+
+// ── Vulnerabilidades ───────────────────────────────────────────────────────
+async function loadVulns() {
+  const alvo = document.getElementById('vuln-alvo-select').value;
+  const tbody = document.getElementById('vulns-tbody');
+  if (!alvo) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:20px;">Selecione um alvo.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;"><span class="spinner"></span></td></tr>`;
+  try {
+    const vulns = await api(`/api/vulnerabilidades?alvo=${encodeURIComponent(alvo)}`);
+    document.getElementById('vuln-count').textContent = `${vulns.length} vulnerabilidade(s)`;
+    if (!vulns.length) {
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">✅</div><p>Nenhuma vulnerabilidade registrada para este alvo.</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = vulns.map(v => `
+      <tr>
+        <td>${v.subdominio||'—'}</td>
+        <td>${v.tipo}</td>
+        <td style="font-family:var(--mono);font-size:12px;">${v.identificador}</td>
+        <td>${sevBadge(v.severidade)}</td>
+        <td><span class="pill ${v.status==='encontrado'?'has-raw':'no-raw'}">${v.status}</span></td>
+        <td style="color:var(--muted);font-size:12px;">${ts(v.primeira_vez)}</td>
+        <td style="color:var(--muted);font-size:12px;">${ts(v.ultima_vez)}</td>
+      </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--red)">Erro: ${e.message}</td></tr>`;
+  }
+}
+
+// ── Detail panel ───────────────────────────────────────────────────────────
+async function openDetail(id) {
+  document.getElementById('detail-title').textContent = `Scan #${id}`;
+  document.getElementById('detail-meta').textContent = 'Carregando…';
+  document.getElementById('out-resultado').textContent = '…';
+  document.getElementById('out-raw').textContent = '…';
+  document.getElementById('out-ai').textContent = '…';
+  document.getElementById('detail-panel').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+  switchTab('resultado', document.querySelector('.detail-tab'));
+
+  try {
+    const s = await api(`/api/scan/${id}`);
+    const params = s.parametros ? JSON.parse(s.parametros) : {};
+    const paramStr = Object.entries(params).map(([k,v]) => `${k}: ${JSON.stringify(v)}`).join(' | ');
+
+    document.getElementById('detail-title').textContent = `${s.ferramenta} → ${s.alvo}`;
+    document.getElementById('detail-meta').innerHTML = `
+      <span>🆔 #${s.id}</span>
+      <span>🕐 ${ts(s.timestamp)}</span>
+      ${paramStr ? `<span title="${paramStr}">⚙️ ${paramStr.substring(0,60)}${paramStr.length>60?'…':''}</span>` : ''}`;
+
+    document.getElementById('out-resultado').textContent = s.resultado || '(sem resultado)';
+
+    const rawBtn = document.getElementById('tab-raw-btn');
+    const aiBtn  = document.getElementById('tab-ai-btn');
+
+    if (s.raw_output) {
+      document.getElementById('out-raw').textContent = s.raw_output;
+      rawBtn.textContent = '✓ Output Bruto';
+      rawBtn.style.color = 'var(--green)';
+    } else {
+      document.getElementById('out-raw').innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>Output bruto não disponível para este scan.<br><small>Scans executados antes da Fase 6 não possuem raw_output.</small></p></div>`;
+      rawBtn.textContent = 'Output Bruto';
+      rawBtn.style.color = '';
+    }
+
+    if (s.llm_analysis) {
+      document.getElementById('out-ai').textContent = s.llm_analysis;
+      aiBtn.textContent = '✓ Análise IA';
+      aiBtn.style.color = 'var(--purple)';
+    } else {
+      document.getElementById('out-ai').innerHTML = `<div class="empty-state"><div class="icon">🤖</div><p>Análise da IA não disponível para este scan.<br><small>A análise IA é opcional e pode ser adicionada futuramente.</small></p></div>`;
+      aiBtn.textContent = 'Análise IA';
+      aiBtn.style.color = '';
+    }
+  } catch (e) {
+    document.getElementById('detail-meta').innerHTML = `<span style="color:var(--red)">Erro: ${e.message}</span>`;
+  }
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
+function switchTab(name, el) {
+  document.querySelectorAll('.detail-tabs .detail-tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  const tabs = ['resultado', 'raw', 'ai'];
+  tabs.forEach(t => {
+    document.getElementById(`tab-${t}`).style.display = (t === name) ? 'block' : 'none';
+  });
+}
+
+// Fix tab click: each tab calls switchTab with correct name already
+document.addEventListener('DOMContentLoaded', () => {
+  const tabBtns = document.querySelectorAll('.detail-tab');
+  tabBtns[0].onclick = function() { switchTab('resultado', this); };
+  tabBtns[1].onclick = function() { switchTab('raw', this); };
+  tabBtns[2].onclick = function() { switchTab('ai', this); };
+});
+
+// ── Start ──────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

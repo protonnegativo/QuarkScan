@@ -109,7 +109,7 @@ def executar_subfinder(
         saida_completa = saida_bruta + prioritarios
         storage.salvar(alvo_limpo, "subfinder", saida_completa, {
             "recursivo": recursivo, "todas_fontes": todas_fontes,
-        })
+        }, raw_output=saida_bruta)
         storage.salvar_metrica("subfinder", alvo_limpo, res.exit_code, res.duracao_ms, res.sucesso)
         if os.environ.get("QUARKSCAN_RAW"):
             print(f"\n[RAW subfinder]\n{saida_completa}\n[/RAW]\n")

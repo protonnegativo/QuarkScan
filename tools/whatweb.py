@@ -95,7 +95,7 @@ def executar_whatweb(
             saida = "WhatWeb não detectou tecnologias."
         storage.salvar(alvo_limpo, "whatweb", saida, {
             "agressividade": nivel, "perfil": perfil_navegador,
-        })
+        }, raw_output=res.stdout.strip())
         storage.salvar_metrica("whatweb", alvo_limpo, res.exit_code, res.duracao_ms, res.sucesso)
         if os.environ.get("QUARKSCAN_RAW"):
             print(f"\n[RAW whatweb]\n{saida}\n[/RAW]\n")

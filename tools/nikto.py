@@ -123,7 +123,7 @@ def executar_nikto(
             )
         storage.salvar(alvo_limpo, "nikto", saida, {
             "porta": porta, "ssl": ssl, "evasao": evasao, "plugins": plugins,
-        })
+        }, raw_output=res.stdout.strip())
         storage.salvar_metrica("nikto", alvo_limpo, res.exit_code, res.duracao_ms, res.sucesso)
         if os.environ.get("QUARKSCAN_RAW"):
             print(f"\n[RAW nikto]\n{saida}\n[/RAW]\n")

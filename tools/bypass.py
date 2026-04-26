@@ -134,6 +134,7 @@ def analisar_bypass_waf(
             ferramenta="bypass_analyst",
             resultado=conteudo,
             parametros={"tipo": tipo, "wafs": wafs_alvo, "payload_hash": cache_key},
+            raw_output=conteudo,
         )
 
         if os.environ.get("QUARKSCAN_RAW"):

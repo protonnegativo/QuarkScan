@@ -130,7 +130,7 @@ def executar_nuclei(
         storage.salvar(alvo_limpo, "nuclei", saida, {
             "tags": tags_validadas, "severidade": severidades_validadas,
             "rate_limit": rate_limit, "timeout": timeout,
-        })
+        }, raw_output=res.stdout.strip())
         storage.salvar_metrica("nuclei", alvo_limpo, res.exit_code, res.duracao_ms, res.sucesso)
         if os.environ.get("QUARKSCAN_RAW"):
             print(f"\n[RAW nuclei]\n{saida}\n[/RAW]\n")

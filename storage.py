@@ -17,14 +17,22 @@ def _init():
     with _conn() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS resultados (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                alvo       TEXT NOT NULL,
-                ferramenta TEXT NOT NULL,
-                parametros TEXT,
-                resultado  TEXT NOT NULL,
-                timestamp  TEXT DEFAULT (datetime('now', 'localtime'))
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                alvo         TEXT NOT NULL,
+                ferramenta   TEXT NOT NULL,
+                parametros   TEXT,
+                resultado    TEXT NOT NULL,
+                raw_output   TEXT,
+                llm_analysis TEXT,
+                timestamp    TEXT DEFAULT (datetime('now', 'localtime'))
             )
         """)
+        # Migração para bancos existentes sem as novas colunas
+        for col in ("raw_output", "llm_analysis"):
+            try:
+                conn.execute(f"ALTER TABLE resultados ADD COLUMN {col} TEXT")
+            except Exception:
+                pass
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_alvo ON resultados(alvo, ferramenta)"
         )
@@ -75,12 +83,31 @@ def _init():
 _init()
 
 
-def salvar(alvo: str, ferramenta: str, resultado: str, parametros: dict = None) -> None:
+def salvar(alvo: str, ferramenta: str, resultado: str, parametros: dict = None, raw_output: str = None) -> None:
     with _conn() as conn:
         conn.execute(
-            "INSERT INTO resultados (alvo, ferramenta, parametros, resultado) VALUES (?,?,?,?)",
-            (alvo.lower(), ferramenta, json.dumps(parametros) if parametros else None, resultado),
+            "INSERT INTO resultados (alvo, ferramenta, parametros, resultado, raw_output) VALUES (?,?,?,?,?)",
+            (alvo.lower(), ferramenta, json.dumps(parametros) if parametros else None, resultado, raw_output),
         )
+
+
+def salvar_llm_analysis(scan_id: int, llm_analysis: str) -> None:
+    """Atualiza a análise da IA para um scan já salvo."""
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE resultados SET llm_analysis=? WHERE id=?",
+            (llm_analysis, scan_id),
+        )
+
+
+def ultimo_id(alvo: str, ferramenta: str) -> Optional[int]:
+    """Retorna o id do scan mais recente de uma ferramenta para um alvo."""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM resultados WHERE alvo=? AND ferramenta=? ORDER BY timestamp DESC LIMIT 1",
+            (alvo.lower(), ferramenta),
+        ).fetchone()
+        return row["id"] if row else None
 
 
 def historico(alvo: str, ferramenta: str = None, limite: int = 10) -> list[dict]:
@@ -257,6 +284,49 @@ def estatisticas_ferramenta(ferramenta: str, alvo: str = None) -> dict:
         "duracao_media_ms": int(row["avg_ms"] or 0),
         "taxa_sucesso_pct": round((row["sucessos"] or 0) / row["total"] * 100, 1),
     }
+
+
+def scan_por_id(scan_id: int) -> dict | None:
+    """Retorna um scan completo (incluindo raw_output e llm_analysis) pelo id."""
+    with _conn() as conn:
+        row = conn.execute("SELECT * FROM resultados WHERE id=?", (scan_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def scans_paginados(alvo: str = None, ferramenta: str = None, limite: int = 50, offset: int = 0) -> list[dict]:
+    """Lista scans com paginação para a web UI."""
+    with _conn() as conn:
+        conditions, params = [], []
+        if alvo:
+            conditions.append("alvo=?")
+            params.append(alvo.lower())
+        if ferramenta:
+            conditions.append("ferramenta=?")
+            params.append(ferramenta)
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        params += [limite, offset]
+        rows = conn.execute(
+            f"SELECT id, alvo, ferramenta, parametros, timestamp, "
+            f"CASE WHEN raw_output IS NOT NULL THEN 1 ELSE 0 END AS tem_raw, "
+            f"CASE WHEN llm_analysis IS NOT NULL THEN 1 ELSE 0 END AS tem_analise "
+            f"FROM resultados {where} ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+            params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def total_scans(alvo: str = None, ferramenta: str = None) -> int:
+    with _conn() as conn:
+        conditions, params = [], []
+        if alvo:
+            conditions.append("alvo=?")
+            params.append(alvo.lower())
+        if ferramenta:
+            conditions.append("ferramenta=?")
+            params.append(ferramenta)
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        row = conn.execute(f"SELECT COUNT(*) AS n FROM resultados {where}", params).fetchone()
+        return row["n"] if row else 0
 
 
 def resumo_memoria(alvo_raiz: str) -> dict:

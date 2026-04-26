@@ -72,7 +72,7 @@ def executar_nmap(alvo: str, argumentos: str, forcar_novo: bool = False) -> str:
                 "verifique se os argumentos são compatíveis com a versão do nmap instalada. "
                 f"Flags suportadas: {', '.join(sorted(FLAGS_PERMITIDAS))}"
             )
-        storage.salvar(alvo_limpo, "nmap", saida, {"argumentos": argumentos})
+        storage.salvar(alvo_limpo, "nmap", saida, {"argumentos": argumentos}, raw_output=res.stdout.strip())
         storage.salvar_metrica("nmap", alvo_limpo, res.exit_code, res.duracao_ms, res.sucesso)
         if os.environ.get("QUARKSCAN_RAW"):
             print(f"\n[RAW nmap]\n{saida}\n[/RAW]\n")

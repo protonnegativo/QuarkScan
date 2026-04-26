@@ -112,7 +112,7 @@ def analisar_headers(
             f"HEADERS ENCONTRADOS:\n{raw}\n\n"
             f"OWASP FALTANDO: {', '.join(faltantes) if faltantes else 'Nenhum ✅'}"
         )
-        storage.salvar(alvo_limpo, "headers", saida, {"protocolo": protocolo, "porta": porta, "perfil": perfil_navegador})
+        storage.salvar(alvo_limpo, "headers", saida, {"protocolo": protocolo, "porta": porta, "perfil": perfil_navegador}, raw_output=raw)
         storage.salvar_metrica("headers", alvo_limpo, response.status_code, duracao_ms, True)
         if os.environ.get("QUARKSCAN_RAW"):
             print(f"\n[RAW headers]\n{saida}\n[/RAW]\n")
