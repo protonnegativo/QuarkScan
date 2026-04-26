@@ -24,14 +24,28 @@ fi
 
 # ── Web UI (roda localmente, sem Docker) ────────────────────────────────────
 if [ "$MODE" = "webui" ]; then
-    echo -e "${BLUE}[*] Iniciando QuarkScan Web UI...${NC}"
-    if ! python3 -c "import flask" 2>/dev/null; then
-        echo -e "${YELLOW}[!] Flask não encontrado. Instalando...${NC}"
-        pip3 install flask --quiet
+    echo -e "${BLUE}[*] Verificando serviço do Docker...${NC}"
+    if ! systemctl is-active --quiet docker; then
+        echo -e "${BLUE}[!] Docker está desligado. Ligando...${NC}"
+        sudo systemctl start docker
     fi
+
+    echo -e "${BLUE}[*] Atualizando imagem (Build)...${NC}"
+    if ! docker build -t quarkscan . ; then
+        echo -e "\033[0;31m[!] Build falhou.\033[0m"
+        exit 1
+    fi
+
     echo -e "${GREEN}[+] Web UI disponível em: http://localhost:${WEBUI_PORT}${NC}"
     echo -e "${GREEN}------------------------------------------${NC}"
-    WEBUI_PORT=$WEBUI_PORT python3 webui.py
+
+    mkdir -p data
+    docker run -it --rm \
+        --env-file .env \
+        -v "$(pwd)/data:/app/data" \
+        -p ${WEBUI_PORT}:5000 \
+        quarkscan \
+        python3 webui.py
     exit 0
 fi
 
