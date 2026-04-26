@@ -100,7 +100,7 @@ def api_stats():
 def _build_command(ferramenta: str, alvo: str, opts: dict) -> list[str]:
     """Monta o comando para cada ferramenta com base nas opções recebidas."""
     if ferramenta == "nmap":
-        args_str = opts.get("argumentos", "-sT --top-ports 1000")
+        args_str = opts.get("argumentos", "-sT -p- --open")
         args_validados = validar_args(args_str)
         if not args_validados:
             raise ValueError(f"Argumentos nmap inválidos. Flags permitidas: {', '.join(sorted(FLAGS_PERMITIDAS))}")
@@ -131,7 +131,7 @@ def _build_command(ferramenta: str, alvo: str, opts: dict) -> list[str]:
         return cmd
 
     if ferramenta == "nuclei":
-        sev = opts.get("severidade", "critical,high,medium")
+        sev = opts.get("severidade", "info,low,medium,high,critical")
         cmd = ["nuclei", "-u", f"https://{alvo}", "-severity", sev,
                "-rate-limit", str(opts.get("rate_limit", 150)),
                "-timeout", str(opts.get("timeout", 5)), "-silent", "-no-color"]
@@ -722,18 +722,18 @@ def _scan_alvo_pipeline(alvo_atual: str, emit, via_label: str = "autopilot"):
             emit("info", data=f"Erro em {ferramenta}: {e}")
             return None
 
-    # Porta scan rápido
-    nmap_quick = run_tool("nmap", {"argumentos": "-sT --top-ports 1000"}) or ""
+    # Fase 1 nmap: todas as portas, reporta só abertas
+    nmap_quick = run_tool("nmap", {"argumentos": "-sT -p- --open"}) or ""
 
-    # IA decide quais portas detalhar
+    # Fase 2 nmap: -sV -sC em todas as portas abertas encontradas
     open_ports = _extract_open_ports(nmap_quick)
     if open_ports:
-        emit("ai_thinking", data=f"[{alvo_atual}] IA analisando {len(open_ports)} porta(s) abertas…")
-        ai_p = _ai_decide_next_phase("nmap top-1000", nmap_quick, alvo_atual)
-        nmap_args = ai_p.get("argumentos", f"-sV -sC -p {','.join(open_ports)}")
+        ports_str = ",".join(open_ports)
+        emit("ai_thinking", data=f"[{alvo_atual}] {len(open_ports)} porta(s) abertas — rodando -sV -sC nelas…")
+        nmap_args = f"-sV -sC -p {ports_str}"
     else:
-        nmap_args = "-sV -sC --top-ports 100"
-    emit("ai_decision", data=f"[{alvo_atual}] nmap: {nmap_args}")
+        nmap_args = "-sV -sC -p-"
+    emit("ai_decision", data=f"[{alvo_atual}] nmap fase 2: {nmap_args}")
     nmap_sv = run_tool("nmap", {"argumentos": nmap_args}) or ""
 
     # Fingerprinting web
@@ -747,7 +747,7 @@ def _scan_alvo_pipeline(alvo_atual: str, emit, via_label: str = "autopilot"):
     emit("ai_decision", data=f"[{alvo_atual}] web: porta {porta_nikto} SSL={use_ssl}")
 
     run_tool("nikto", {"porta": str(porta_nikto), "ssl": "1" if use_ssl else ""})
-    run_tool("nuclei", {"severidade": "critical,high,medium"})
+    run_tool("nuclei", {"severidade": "info,low,medium,high,critical"})
 
     proto = "https" if use_ssl else "http"
     run_tool("gobuster", {"protocolo": proto, "wordlist": "common", "threads": 20})
