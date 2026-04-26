@@ -1,9 +1,10 @@
 from langchain_core.tools import tool
-from llm import criar_llm
 from langgraph.prebuilt import create_react_agent
+
+from agents.base import invocar
+from llm import criar_llm
 from prompts import PROMPT_HEADERS
 from tools.headers import analisar_headers
-from agents.base import invocar
 
 _llm = criar_llm("headers")
 _agente = create_react_agent(_llm, tools=[analisar_headers], prompt=PROMPT_HEADERS)

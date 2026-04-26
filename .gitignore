@@ -39,3 +39,8 @@ Thumbs.db
 *.xml
 *.nmap
 *.gnmap
+
+# Claude Code / AI tooling
+.claude/
+.agents/
+skills-lock.json

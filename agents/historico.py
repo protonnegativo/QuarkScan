@@ -1,9 +1,10 @@
 from langchain_core.tools import tool
-from llm import criar_llm
 from langgraph.prebuilt import create_react_agent
-from prompts import PROMPT_HISTORICO
-from tools.historico import listar_alvos_salvos, consultar_historico, comparar_scans
+
 from agents.base import invocar
+from llm import criar_llm
+from prompts import PROMPT_HISTORICO
+from tools.historico import comparar_scans, consultar_historico, listar_alvos_salvos
 
 _llm = criar_llm("historico")
 _agente = create_react_agent(

@@ -1,9 +1,10 @@
 from langchain_core.tools import tool
-from llm import criar_llm
 from langgraph.prebuilt import create_react_agent
+
+from agents.base import invocar
+from llm import criar_llm
 from prompts import PROMPT_NUCLEI
 from tools.nuclei import executar_nuclei
-from agents.base import invocar
 
 _llm = criar_llm("nuclei")
 _agente = create_react_agent(_llm, tools=[executar_nuclei], prompt=PROMPT_NUCLEI)

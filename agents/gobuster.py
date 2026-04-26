@@ -1,9 +1,10 @@
 from langchain_core.tools import tool
-from llm import criar_llm
 from langgraph.prebuilt import create_react_agent
+
+from agents.base import invocar
+from llm import criar_llm
 from prompts import PROMPT_GOBUSTER
 from tools.gobuster import executar_gobuster
-from agents.base import invocar
 
 _llm = criar_llm("gobuster")
 _agente = create_react_agent(_llm, tools=[executar_gobuster], prompt=PROMPT_GOBUSTER)

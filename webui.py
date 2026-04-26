@@ -16,11 +16,10 @@ import time
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-import requests as _requests
 from flask import Flask, Response, abort, jsonify, request, send_file
 
 import storage
-from security import validar_alvo, validar_args, FLAGS_PERMITIDAS
+from security import FLAGS_PERMITIDAS, validar_alvo, validar_args
 
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False

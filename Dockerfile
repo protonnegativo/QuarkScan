@@ -3,14 +3,14 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
-    nmap \
-    nikto \
-    whatweb \
-    gobuster \
     curl \
-    unzip \
+    gobuster \
+    nikto \
+    nmap \
     python3 \
     python3-pip \
+    unzip \
+    whatweb \
     && rm -rf /var/lib/apt/lists/*
 
 RUN SUBFINDER_VER=$(curl -s https://api.github.com/repos/projectdiscovery/subfinder/releases/latest \
@@ -47,4 +47,8 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 
 EXPOSE 5000
 
-CMD ["python3", "agente.py"]
+# MODE=webui  → dashboard web (padrão via start_agent.sh --webui)
+# MODE=agent  → interface de linha de comando interativa
+ENV MODE=webui
+
+CMD ["sh", "-c", "if [ \"$MODE\" = 'agent' ]; then python3 agente.py; else python3 webui.py; fi"]
