@@ -418,6 +418,48 @@ As seções seguem as fases de um engajamento real. Itens dentro de cada fase es
 | **agente_diff** | Comparação automática entre relatórios do mesmo alvo em datas diferentes: o que surgiu, foi corrigido e o que piorou |
 | **Notificação** | Webhook/Telegram ao término de scan longo ou quando vulnerabilidade crítica for encontrada |
 
+### Fase 7 — Integração com Obsidian
+
+*Exportar o banco de dados do QuarkScan para um vault Obsidian, tornando os resultados navegáveis como um grafo de conhecimento visual.*
+
+A ideia central é que cada entidade relevante do pentest — domínio, subdomínio, porta, serviço, vulnerabilidade, CVE — vire uma **nota individual** com links bidirecionais entre si. O Graph View do Obsidian passa a mostrar a superfície de ataque como um mapa de relacionamentos.
+
+**Estrutura de notas proposta:**
+
+```
+vault/
+├── Projetos/
+│   └── ClienteX.md              ← nota-raiz do engajamento
+├── Alvos/
+│   ├── exemplo.com.md
+│   ├── api.exemplo.com.md       ← subdomínio como nota própria
+│   └── admin.exemplo.com.md
+├── Portas/
+│   ├── 80-http.md
+│   └── 443-https.md
+├── Vulnerabilidades/
+│   ├── CVE-2024-XXXX.md
+│   └── SQLi-login-form.md
+├── Scans/
+│   └── nmap-exemplo.com-2025-04-26.md
+└── Tags/
+    └── #critical  #exposed  #needs-retest
+```
+
+Cada nota usa **frontmatter YAML** para metadados estruturados (severidade, status, timestamp, ferramenta) e **wikilinks** (`[[api.exemplo.com]]`) para conectar alvos, portas e vulnerabilidades. O resultado no Graph View é um mapa visual da superfície de ataque onde clusters indicam os alvos mais expostos.
+
+| Item | Descrição |
+|---|---|
+| **Exportador base** | Script `quarkscan_to_obsidian.py` que lê o SQLite e gera as notas Markdown com frontmatter e wikilinks. Incremental — só cria/atualiza notas cujos dados mudaram desde a última exportação |
+| **Nota de projeto** | Página-raiz por engajamento com sumário executivo gerado por LLM, lista de alvos linkados, contagem de vulns por severidade e status de cobertura das fases PTES |
+| **Notas de alvo/subdomínio** | Uma nota por host com: portas abertas, tecnologias detectadas (whatweb/headers), vulnerabilidades linkadas, histórico de scans e última análise IA inline |
+| **Notas de vulnerabilidade** | Uma nota por CVE/finding com: severidade, descrição, alvos afetados linkados, evidência (trecho do raw output), status (encontrado/confirmado/falso-positivo/corrigido) e próximos passos sugeridos pela IA |
+| **Notas de scan** | Raw output e análise IA de cada scan como nota de referência linkada ao alvo — permite navegar de uma vuln até a evidência exata que a originou |
+| **Dataview support** | Frontmatter estruturado compatível com o plugin Dataview, permitindo tabelas dinâmicas como "todas as vulns críticas abertas" ou "alvos sem scan de nuclei nos últimos 7 dias" |
+| **Canvas automático** | Gera um arquivo `.canvas` do Obsidian com um layout visual do engajamento: projeto no centro, alvos em volta, vulnerabilidades nas bordas com cores por severidade — sem precisar abrir o Graph View |
+| **Sync bidirecional de status** | Atualizar o status de uma vulnerabilidade na nota Obsidian (`status: corrigido`) reflete no banco SQLite na próxima sincronização |
+| **Integração com Web UI** | Botão "Exportar para Obsidian" na página do projeto na Web UI — exporta o projeto ativo para um vault configurado em `OBSIDIAN_VAULT_PATH` |
+
 ---
 
 ## Aviso Legal
