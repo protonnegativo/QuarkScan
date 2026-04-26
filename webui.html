@@ -222,6 +222,62 @@
     .search-result-item { padding:6px 10px; font-size:12px; cursor:pointer; color:var(--text); }
     .search-result-item:hover { background:var(--bg3); color:var(--accent); }
 
+    /* ── Workspace de Projeto ─────────────────────────────────────────── */
+    .proj-workspace { position:fixed; inset:0; background:var(--bg); z-index:150; display:none; flex-direction:column; }
+    .proj-workspace.open { display:flex; }
+
+    /* Header do workspace */
+    .pw-header { height:52px; background:var(--bg2); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 20px; gap:12px; flex-shrink:0; }
+    .pw-back { background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer; padding:0 6px; line-height:1; }
+    .pw-back:hover { color:var(--text); background:none; }
+    .pw-proj-nome { font-size:16px; font-weight:700; color:var(--purple); flex:1; }
+    .pw-proj-desc { font-size:12px; color:var(--muted); }
+    .pw-badge { font-size:11px; padding:2px 8px; border-radius:8px; background:rgba(188,140,255,.15); border:1px solid rgba(188,140,255,.3); color:var(--purple); }
+
+    /* Body: abas laterais + conteúdo */
+    .pw-body { flex:1; display:flex; overflow:hidden; }
+
+    /* Abas laterais */
+    .pw-tabs { width:180px; min-width:160px; background:var(--bg2); border-right:1px solid var(--border); display:flex; flex-direction:column; padding:8px 0; flex-shrink:0; }
+    .pw-tab { padding:9px 16px; cursor:pointer; font-size:13px; color:var(--muted); border-left:3px solid transparent; display:flex; align-items:center; gap:8px; transition:all .12s; }
+    .pw-tab:hover { background:var(--bg3); color:var(--text); }
+    .pw-tab.active { background:rgba(188,140,255,.1); border-left-color:var(--purple); color:var(--purple); font-weight:600; }
+    .pw-tab .pw-tab-badge { margin-left:auto; font-size:10px; background:var(--bg3); padding:1px 5px; border-radius:8px; color:var(--muted); }
+    .pw-tab.active .pw-tab-badge { background:rgba(188,140,255,.2); color:var(--purple); }
+
+    /* Conteúdo das abas */
+    .pw-content { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+    .pw-panel { display:none; flex:1; overflow-y:auto; padding:20px; flex-direction:column; }
+    .pw-panel.active { display:flex; }
+
+    /* Aba Visão Geral */
+    .pw-stats { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+    .pw-stat { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:14px 18px; min-width:120px; flex:1; }
+    .pw-stat .n { font-size:28px; font-weight:700; line-height:1.1; }
+    .pw-stat .l { font-size:11px; color:var(--muted); margin-top:3px; }
+    .pw-alvo-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; margin-bottom:8px; display:flex; align-items:center; gap:10px; cursor:pointer; transition:border-color .12s; }
+    .pw-alvo-card:hover { border-color:var(--accent); }
+    .pw-alvo-card .ac-name { font-family:var(--mono); font-size:13px; font-weight:600; flex:1; }
+    .pw-alvo-card .ac-meta { font-size:11px; color:var(--muted); }
+
+    /* Aba Scans */
+    .pw-scan-row { display:flex; align-items:center; gap:10px; padding:9px 12px; border-bottom:1px solid var(--border); cursor:pointer; font-size:13px; transition:background .1s; }
+    .pw-scan-row:hover { background:var(--bg2); }
+    .pw-scan-row .sr-alvo { font-family:var(--mono); font-size:12px; color:var(--muted); min-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .pw-scan-row .sr-ts { font-size:11px; color:var(--muted); white-space:nowrap; }
+
+    /* Aba Vulnerabilidades */
+    .pw-vuln-row { padding:10px 14px; border-bottom:1px solid var(--border); display:flex; align-items:flex-start; gap:10px; font-size:13px; }
+    .pw-vuln-row .vr-body { flex:1; min-width:0; }
+    .pw-vuln-row .vr-id { font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:2px; word-break:break-all; }
+
+    /* Aba Chat do Projeto */
+    .pw-chat { display:flex; flex-direction:column; flex:1; overflow:hidden; }
+    .pw-chat-ctx { padding:10px 16px; background:rgba(188,140,255,.07); border-bottom:1px solid rgba(188,140,255,.2); font-size:11px; color:var(--purple); flex-shrink:0; }
+    .pw-chat-msgs { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
+    .pw-chat-input { padding:12px 16px; border-top:1px solid var(--border); display:flex; gap:8px; align-items:flex-end; background:var(--bg2); flex-shrink:0; }
+    .pw-chat-input textarea { flex:1; resize:none; min-height:38px; max-height:120px; font-family:var(--font); font-size:13px; line-height:1.5; padding:8px 10px; }
+
     /* Página Alvos */
     .alvos-toolbar { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
     .alvos-toolbar input { flex:1; min-width:200px; }
@@ -611,6 +667,91 @@
   </div>
 </div>
 
+<!-- ══ WORKSPACE DE PROJETO ══════════════════════════════════════════════ -->
+<div class="proj-workspace" id="proj-workspace">
+
+  <!-- Header -->
+  <div class="pw-header">
+    <button class="pw-back" onclick="fecharWorkspace()" title="Voltar">←</button>
+    <div style="flex:1;min-width:0;">
+      <div class="pw-proj-nome" id="pw-nome">—</div>
+      <div class="pw-proj-desc" id="pw-desc"></div>
+    </div>
+    <span class="pw-badge" id="pw-badge-alvos">0 alvos</span>
+    <span class="pw-badge" id="pw-badge-scans" style="margin-left:6px;">0 scans</span>
+    <button onclick="entrarModoAtivo()" id="pw-btn-ativar" class="primary" style="font-size:12px;padding:5px 12px;margin-left:12px;">▶ Ativar para Scans</button>
+    <button onclick="sairDoProjeto()" id="pw-btn-desativar" style="display:none;font-size:12px;padding:5px 12px;margin-left:12px;background:rgba(248,81,73,.15);border-color:rgba(248,81,73,.3);color:var(--red);">■ Desativar</button>
+  </div>
+
+  <!-- Body -->
+  <div class="pw-body">
+
+    <!-- Abas laterais -->
+    <div class="pw-tabs">
+      <div class="pw-tab active" onclick="pwTab('overview',this)">📊 Visão Geral</div>
+      <div class="pw-tab" onclick="pwTab('alvos',this)">🎯 Alvos <span class="pw-tab-badge" id="pw-tab-n-alvos">0</span></div>
+      <div class="pw-tab" onclick="pwTab('scans',this)">🔍 Scans <span class="pw-tab-badge" id="pw-tab-n-scans">0</span></div>
+      <div class="pw-tab" onclick="pwTab('vulns',this)">🚨 Vulns <span class="pw-tab-badge" id="pw-tab-n-vulns">0</span></div>
+      <div class="pw-tab" onclick="pwTab('chat',this)">🤖 Chat IA</div>
+    </div>
+
+    <!-- Conteúdo das abas -->
+    <div class="pw-content">
+
+      <!-- Visão Geral -->
+      <div class="pw-panel active" id="pw-panel-overview">
+        <div class="pw-stats" id="pw-stats"></div>
+        <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">Alvos do Projeto</div>
+        <div id="pw-alvo-cards"></div>
+      </div>
+
+      <!-- Alvos -->
+      <div class="pw-panel" id="pw-panel-alvos">
+        <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;">
+          <input id="pw-alvo-filtro" placeholder="Filtrar alvos…" oninput="pwFiltrarAlvos()" style="flex:1;max-width:320px;" />
+          <button onclick="abrirModalProjeto(projetoAtivo?.id)" style="font-size:12px;padding:5px 10px;">+ Editar Projeto</button>
+        </div>
+        <table class="alvos-table">
+          <thead><tr><th>Alvo</th><th>Scans</th><th>Ferramentas</th><th>Último scan</th><th></th></tr></thead>
+          <tbody id="pw-alvos-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- Scans -->
+      <div class="pw-panel" id="pw-panel-scans">
+        <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;">
+          <input id="pw-scan-filtro" placeholder="Filtrar por alvo ou ferramenta…" oninput="pwFiltrarScans()" style="flex:1;max-width:320px;" />
+          <select id="pw-scan-tool-filter" onchange="pwFiltrarScans()" style="width:140px;"><option value="">Todas as tools</option></select>
+        </div>
+        <div id="pw-scans-list"></div>
+      </div>
+
+      <!-- Vulnerabilidades -->
+      <div class="pw-panel" id="pw-panel-vulns">
+        <div id="pw-vulns-list"></div>
+      </div>
+
+      <!-- Chat IA com contexto do projeto -->
+      <div class="pw-panel" id="pw-panel-chat" style="padding:0;">
+        <div class="pw-chat">
+          <div class="pw-chat-ctx" id="pw-chat-ctx">🤖 IA com acesso completo aos scans do projeto</div>
+          <div class="pw-chat-msgs" id="pw-chat-msgs">
+            <div class="chat-msg assistant">
+              <div class="chat-bubble">Olá! Tenho acesso completo aos dados deste projeto. Posso analisar vulnerabilidades, sugerir próximos passos, explicar resultados ou responder qualquer dúvida técnica. Como posso ajudar?</div>
+            </div>
+          </div>
+          <div class="pw-chat-input">
+            <textarea id="pw-chat-input-txt" placeholder="Pergunte sobre os alvos, vulnerabilidades, próximos passos… (Enter envia)"
+              onkeydown="pwChatKeydown(event)" rows="1" oninput="autoResizeTextarea(this)"></textarea>
+            <button class="primary" id="pw-chat-send" onclick="pwEnviarMensagem()" style="padding:8px 14px;align-self:flex-end;">Enviar</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /pw-content -->
+  </div><!-- /pw-body -->
+</div><!-- /proj-workspace -->
+
 <!-- Modal: Adicionar alvos selecionados a um projeto -->
 <div id="modal-add-proj" style="display:none;" class="modal-backdrop" onclick="if(event.target===this)fecharModalAddProj()">
   <div class="modal" style="width:400px;">
@@ -728,16 +869,74 @@ function reloadAll() {
   if (cur && cur.id === 'page-alvos') loadAlvosTodos();
 }
 
-// ── Projeto ativo ──────────────────────────────────────────────────────────
-let projetoAtivo = null;  // {id, nome}
+// ── Projeto ativo + Workspace ──────────────────────────────────────────────
+let projetoAtivo = null;   // {id, nome} — projeto marcado como ativo para scans
+let _pwCtx = null;         // dados completos do workspace aberto
+let _pwScansAll = [];
+let _pwAlvosAll = [];
+let _pwVulnsAll = [];
+let _pwChatTyping = false;
 
+// Abre o workspace do projeto (view imersiva)
 async function entrarNoProjeto(id, nome) {
-  projetoAtivo = {id, nome};
+  document.getElementById('pw-nome').textContent = nome;
+  document.getElementById('pw-desc').textContent = 'Carregando…';
+  document.getElementById('proj-workspace').classList.add('open');
+  // Reset abas
+  pwTab('overview', document.querySelector('.pw-tab'));
+  document.getElementById('pw-chat-msgs').innerHTML =
+    `<div class="chat-msg assistant"><div class="chat-bubble">Olá! Tenho acesso completo aos dados deste projeto. Posso analisar vulnerabilidades, sugerir próximos passos, explicar resultados ou responder qualquer dúvida técnica. Como posso ajudar?</div></div>`;
+
+  await carregarWorkspace(id);
+  atualizarBotoesWorkspace();
+}
+
+async function carregarWorkspace(id) {
+  try {
+    _pwCtx = await api(`/api/projetos/${id}/contexto`);
+    const p = _pwCtx.projeto;
+    _pwAlvosAll = _pwCtx.stats_alvos || [];
+    _pwScansAll = _pwCtx.scans || [];
+    _pwVulnsAll = _pwCtx.vulnerabilidades || [];
+
+    document.getElementById('pw-nome').textContent = p.nome;
+    document.getElementById('pw-desc').textContent = p.descricao || '';
+    document.getElementById('pw-badge-alvos').textContent = `${_pwAlvosAll.length} alvos`;
+    document.getElementById('pw-badge-scans').textContent = `${_pwScansAll.length} scans`;
+    document.getElementById('pw-tab-n-alvos').textContent = _pwAlvosAll.length;
+    document.getElementById('pw-tab-n-scans').textContent = _pwScansAll.length;
+    document.getElementById('pw-tab-n-vulns').textContent = _pwVulnsAll.length;
+
+    // Contexto do chat
+    const vulnsCrit = _pwVulnsAll.filter(v => v.severidade === 'critical' || v.severidade === 'high').length;
+    document.getElementById('pw-chat-ctx').textContent =
+      `🤖 IA ciente de ${_pwAlvosAll.length} alvo(s), ${_pwScansAll.length} scan(s) e ${_pwVulnsAll.length} vuln(s) (${vulnsCrit} críticas/altas)`;
+
+    renderPwOverview();
+    renderPwAlvos();
+    renderPwScans();
+    renderPwVulns();
+  } catch(e) {
+    document.getElementById('pw-desc').textContent = `Erro: ${e.message}`;
+  }
+}
+
+function fecharWorkspace() {
+  document.getElementById('proj-workspace').classList.remove('open');
+  _pwCtx = null;
+}
+
+// Ativa o projeto para receber scans automaticamente
+async function entrarModoAtivo() {
+  if (!_pwCtx) return;
+  const p = _pwCtx.projeto;
+  projetoAtivo = {id: p.id, nome: p.nome};
   await api('/api/projeto-ativo', {
     method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({id, nome}),
+    body: JSON.stringify({id: p.id, nome: p.nome}),
   });
   atualizarBannerProjeto();
+  atualizarBotoesWorkspace();
   loadProjetos();
 }
 
@@ -748,7 +947,14 @@ async function sairDoProjeto() {
     body: JSON.stringify({limpar: true}),
   });
   atualizarBannerProjeto();
+  atualizarBotoesWorkspace();
   loadProjetos();
+}
+
+function atualizarBotoesWorkspace() {
+  const isAtivo = projetoAtivo && _pwCtx && projetoAtivo.id === _pwCtx.projeto.id;
+  document.getElementById('pw-btn-ativar').style.display = isAtivo ? 'none' : 'inline-block';
+  document.getElementById('pw-btn-desativar').style.display = isAtivo ? 'inline-block' : 'none';
 }
 
 function atualizarBannerProjeto() {
@@ -758,6 +964,210 @@ function atualizarBannerProjeto() {
     banner.classList.add('show');
   } else {
     banner.classList.remove('show');
+  }
+}
+
+// ── Abas do workspace ──────────────────────────────────────────────────────
+function pwTab(name, el) {
+  document.querySelectorAll('.pw-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.pw-panel').forEach(p => p.classList.remove('active'));
+  if (el) el.classList.add('active');
+  const panel = document.getElementById(`pw-panel-${name}`);
+  if (panel) panel.classList.add('active');
+  if (name === 'chat') setTimeout(() => {
+    const msgs = document.getElementById('pw-chat-msgs');
+    msgs.scrollTop = msgs.scrollHeight;
+  }, 30);
+}
+
+// ── Visão Geral ────────────────────────────────────────────────────────────
+function renderPwOverview() {
+  const vulnsCrit = _pwVulnsAll.filter(v => v.severidade === 'critical').length;
+  const vulnsHigh = _pwVulnsAll.filter(v => v.severidade === 'high').length;
+  const tools = new Set(_pwScansAll.map(s => s.ferramenta));
+
+  document.getElementById('pw-stats').innerHTML = `
+    <div class="pw-stat"><div class="n" style="color:var(--accent)">${_pwAlvosAll.length}</div><div class="l">Alvos</div></div>
+    <div class="pw-stat"><div class="n" style="color:var(--green)">${_pwScansAll.length}</div><div class="l">Scans</div></div>
+    <div class="pw-stat"><div class="n" style="color:var(--red)">${vulnsCrit}</div><div class="l">Críticas</div></div>
+    <div class="pw-stat"><div class="n" style="color:var(--orange)">${vulnsHigh}</div><div class="l">Altas</div></div>
+    <div class="pw-stat"><div class="n" style="color:var(--purple)">${tools.size}</div><div class="l">Ferramentas</div></div>`;
+
+  document.getElementById('pw-alvo-cards').innerHTML = _pwAlvosAll.length
+    ? _pwAlvosAll.map(a => `
+        <div class="pw-alvo-card" onclick="pwTab('scans',document.querySelectorAll('.pw-tab')[2]);pwFiltrarScansPorAlvo('${a.alvo}')">
+          <span style="font-size:18px;">🎯</span>
+          <div style="flex:1;min-width:0;">
+            <div class="ac-name">${a.alvo}</div>
+            <div class="ac-meta">${a.total_scans} scan(s) · ${(a.ferramentas||[]).join(', ')||'—'}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="ac-meta">${ts(a.ultimo_scan)}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px;">
+              ${_pwVulnsAll.filter(v=>v.subdominio===a.alvo||v.alvo_raiz===a.alvo).length} vulns
+            </div>
+          </div>
+        </div>`)
+      .join('')
+    : `<div class="empty-state"><div class="icon">🎯</div><p>Nenhum alvo neste projeto.</p></div>`;
+}
+
+// ── Aba Alvos ──────────────────────────────────────────────────────────────
+function renderPwAlvos(filtro = '') {
+  const lista = filtro
+    ? _pwAlvosAll.filter(a => a.alvo.includes(filtro.toLowerCase()))
+    : _pwAlvosAll;
+  const tbody = document.getElementById('pw-alvos-tbody');
+  tbody.innerHTML = lista.length ? lista.map(a => {
+    const tools = (a.ferramentas||[]).map(t => `<span class="tool-pill ${t}">${t}</span>`).join('');
+    return `<tr>
+      <td style="font-family:var(--mono);font-size:12px;font-weight:600;">${a.alvo}</td>
+      <td style="color:var(--muted);">${a.total_scans}</td>
+      <td>${tools}</td>
+      <td style="color:var(--muted);font-size:12px;">${ts(a.ultimo_scan)}</td>
+      <td><button onclick="pwFiltrarScansPorAlvo('${a.alvo}');pwTab('scans',document.querySelectorAll('.pw-tab')[2])" style="font-size:11px;padding:3px 8px;">Ver scans</button></td>
+    </tr>`;
+  }).join('')
+  : `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);">Nenhum alvo.</td></tr>`;
+}
+
+function pwFiltrarAlvos() {
+  renderPwAlvos(document.getElementById('pw-alvo-filtro').value);
+}
+
+// ── Aba Scans ──────────────────────────────────────────────────────────────
+function renderPwScans(lista) {
+  lista = lista ?? _pwScansAll;
+  // Popula filtro de tools
+  const tools = [...new Set(_pwScansAll.map(s => s.ferramenta))];
+  const sel = document.getElementById('pw-scan-tool-filter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Todas as tools</option>' +
+    tools.map(t => `<option value="${t}" ${t===cur?'selected':''}>${t}</option>`).join('');
+
+  document.getElementById('pw-scans-list').innerHTML = lista.length
+    ? lista.map(s => `
+        <div class="pw-scan-row" onclick="openDetail(${s.id})">
+          <span>${toolBadge(s.ferramenta)}</span>
+          <span class="sr-alvo">${s.alvo}</span>
+          <span style="flex:1"></span>
+          ${rawPill(s.raw_output)} ${aiPill(s.llm_analysis)}
+          <span class="sr-ts">${ts(s.timestamp)}</span>
+        </div>`)
+      .join('')
+    : `<div class="empty-state"><div class="icon">🔍</div><p>Nenhum scan.</p></div>`;
+}
+
+function pwFiltrarScans() {
+  const q = document.getElementById('pw-scan-filtro').value.toLowerCase();
+  const tool = document.getElementById('pw-scan-tool-filter').value;
+  let lista = _pwScansAll;
+  if (q) lista = lista.filter(s => s.alvo.includes(q) || s.ferramenta.includes(q));
+  if (tool) lista = lista.filter(s => s.ferramenta === tool);
+  renderPwScans(lista);
+}
+
+function pwFiltrarScansPorAlvo(alvo) {
+  document.getElementById('pw-scan-filtro').value = alvo;
+  pwFiltrarScans();
+}
+
+// ── Aba Vulnerabilidades ───────────────────────────────────────────────────
+function renderPwVulns() {
+  const el = document.getElementById('pw-vulns-list');
+  if (!_pwVulnsAll.length) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">✅</div><p>Nenhuma vulnerabilidade registrada.</p></div>`;
+    return;
+  }
+  // Ordena por severidade
+  const ordem = {critical:0, high:1, medium:2, low:3, unknown:4};
+  const sorted = [..._pwVulnsAll].sort((a,b) => (ordem[a.severidade]??5) - (ordem[b.severidade]??5));
+  el.innerHTML = sorted.map(v => `
+    <div class="pw-vuln-row">
+      <span>${sevBadge(v.severidade)}</span>
+      <div class="vr-body">
+        <div><strong>${v.tipo}</strong> — ${v.subdominio || v.alvo_raiz || '—'}</div>
+        <div class="vr-id">${v.identificador}</div>
+      </div>
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap;">${ts(v.ultima_vez)}</span>
+    </div>`).join('');
+}
+
+// ── Chat IA do Projeto ─────────────────────────────────────────────────────
+function pwChatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); pwEnviarMensagem(); }
+}
+
+function pwAppendMsg(role, texto) {
+  const wrap = document.getElementById('pw-chat-msgs');
+  const div = document.createElement('div');
+  div.className = `chat-msg ${role}`;
+  div.innerHTML = `<div class="chat-bubble">${escHtml(texto)}</div>`;
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+  return div;
+}
+
+async function pwEnviarMensagem() {
+  if (_pwChatTyping || !_pwCtx) return;
+  const input = document.getElementById('pw-chat-input-txt');
+  const texto = input.value.trim();
+  if (!texto) return;
+  input.value = ''; input.style.height = 'auto';
+
+  pwAppendMsg('user', texto);
+  _pwChatTyping = true;
+  document.getElementById('pw-chat-send').disabled = true;
+
+  // Indicador de digitação
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'chat-msg assistant';
+  typingDiv.innerHTML = `<div class="chat-bubble"><div class="chat-typing"><span></span><span></span><span></span></div></div>`;
+  document.getElementById('pw-chat-msgs').appendChild(typingDiv);
+  document.getElementById('pw-chat-msgs').scrollTop = 9999;
+
+  try {
+    const resp = await fetch(`/api/projetos/${_pwCtx.projeto.id}/chat`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mensagem: texto}),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '', resposta = '';
+
+    typingDiv.remove();
+    const bubble = pwAppendMsg('assistant', '…');
+    const bubbleEl = bubble.querySelector('.chat-bubble');
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        try {
+          const msg = JSON.parse(line.slice(5).trim());
+          if (msg.type === 'chunk') {
+            resposta = msg.data;
+            bubbleEl.textContent = resposta;
+            document.getElementById('pw-chat-msgs').scrollTop = 9999;
+          } else if (msg.type === 'error') {
+            bubbleEl.innerHTML = `<span style="color:var(--red)">Erro: ${escHtml(msg.data)}</span>`;
+          }
+        } catch {}
+      }
+    }
+  } catch(e) {
+    typingDiv.remove();
+    pwAppendMsg('assistant', `Erro de conexão: ${e.message}`);
+  } finally {
+    _pwChatTyping = false;
+    document.getElementById('pw-chat-send').disabled = false;
   }
 }
 

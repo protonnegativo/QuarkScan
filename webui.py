@@ -314,6 +314,120 @@ def api_alvos_buscar():
     return jsonify(storage.alvos_por_dominio(q))
 
 
+@app.route("/api/projetos/<int:pid>/contexto")
+def api_projeto_contexto(pid):
+    """Retorna dados completos do projeto: alvos, scans recentes, vulnerabilidades."""
+    projs = storage.projetos_listar()
+    proj = next((p for p in projs if p["id"] == pid), None)
+    if not proj:
+        abort(404, "Projeto não encontrado.")
+    alvos = proj.get("alvos") or []
+    scans = []
+    vulns = []
+    for alvo in alvos:
+        scans += storage.historico(alvo, limite=20)
+        vulns += storage.vulns_conhecidas(alvo)
+    # Stats por alvo
+    stats_alvos = []
+    for alvo in alvos:
+        rows = storage.historico(alvo, limite=100)
+        tools = list({r["ferramenta"] for r in rows})
+        stats_alvos.append({
+            "alvo": alvo,
+            "total_scans": len(rows),
+            "ferramentas": tools,
+            "ultimo_scan": rows[0]["timestamp"] if rows else None,
+        })
+    return jsonify({
+        "projeto": proj,
+        "stats_alvos": stats_alvos,
+        "scans": sorted(scans, key=lambda x: x["timestamp"], reverse=True)[:50],
+        "vulnerabilidades": vulns,
+    })
+
+
+@app.route("/api/projetos/<int:pid>/chat", methods=["POST"])
+def api_projeto_chat(pid):
+    """Chat SSE com contexto completo do projeto injetado no prompt."""
+    body = request.get_json(force=True, silent=True) or {}
+    mensagem = (body.get("mensagem") or "").strip()
+    session_id = f"proj_{pid}"
+
+    if not mensagem:
+        abort(400, "Campo 'mensagem' obrigatório.")
+
+    from security import sanitizar_input
+    mensagem = sanitizar_input(mensagem)
+
+    # Constrói contexto do projeto
+    projs = storage.projetos_listar()
+    proj = next((p for p in projs if p["id"] == pid), None)
+    alvos = proj.get("alvos", []) if proj else []
+
+    blocos_ctx = []
+    for alvo in alvos[:10]:
+        scans = storage.historico(alvo, limite=5)
+        for s in scans:
+            conteudo = s.get("raw_output") or s.get("resultado") or ""
+            if conteudo:
+                blocos_ctx.append(f"[{alvo} / {s['ferramenta']} / {s['timestamp']}]\n{conteudo[:2000]}")
+
+    vulns = []
+    for alvo in alvos:
+        vulns += storage.vulns_conhecidas(alvo)
+
+    sistema = f"""Você é um especialista em segurança ofensiva assistindo um pentester que trabalha no projeto "{proj['nome'] if proj else 'desconhecido'}".
+
+ALVOS DO PROJETO: {', '.join(alvos) if alvos else 'nenhum'}
+
+VULNERABILIDADES CONHECIDAS ({len(vulns)} total):
+{chr(10).join(f"- [{v.get('severidade','?').upper()}] {v.get('subdominio','')} — {v.get('tipo','')} — {v.get('identificador','')}" for v in vulns[:20]) if vulns else 'Nenhuma registrada.'}
+
+ÚLTIMOS RESULTADOS DE SCANS:
+{chr(10).join(blocos_ctx[:8]) if blocos_ctx else 'Nenhum scan disponível.'}
+
+Responda de forma técnica, direta e baseando-se nos dados acima. Quando sugerir próximos passos, seja específico com comandos."""
+
+    storage.chat_salvar_mensagem(session_id, "user", mensagem)
+
+    q = queue.Queue()
+
+    def _run():
+        try:
+            from agents.supervisor import supervisor
+            config = {"configurable": {"thread_id": session_id}}
+            prompt_completo = f"{sistema}\n\n---\nPergunta do pentester: {mensagem}"
+            resposta = supervisor.invoke({"messages": [("user", prompt_completo)]}, config=config)
+            conteudo = resposta["messages"][-1].content
+            if isinstance(conteudo, list):
+                texto = "\n".join(
+                    item.get("text", "") if isinstance(item, dict) else str(item)
+                    for item in conteudo
+                ).strip()
+            else:
+                texto = str(conteudo or "").strip()
+            storage.chat_salvar_mensagem(session_id, "assistant", texto)
+            q.put({"type": "chunk", "data": texto})
+            q.put({"type": "done"})
+        except Exception as e:
+            q.put({"type": "error", "data": str(e)})
+
+    threading.Thread(target=_run, daemon=True).start()
+
+    def generate():
+        while True:
+            try:
+                msg = q.get(timeout=120)
+                yield f"data: {json.dumps(msg)}\n\n"
+                if msg["type"] in ("done", "error"):
+                    break
+            except queue.Empty:
+                yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @app.route("/api/projeto-ativo", methods=["GET"])
 def api_projeto_ativo_get():
     return jsonify(_projeto_ativo)
