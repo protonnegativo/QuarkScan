@@ -686,7 +686,7 @@ def _scan_alvo_pipeline(alvo_atual: str, emit, via_label: str = "autopilot"):
         inicio = time.time()
         try:
             proc = subprocess.Popen(
-                ["stdbuf", "-oL", "-eL"] + _build_command(ferramenta, alvo_atual, opts),
+                ["stdbuf", "-oL", "-eL"] + comando,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
             )
             while True:
