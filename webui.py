@@ -125,14 +125,16 @@ def _build_command(ferramenta: str, alvo: str, opts: dict) -> list[str]:
 
     if ferramenta == "nikto":
         porta = str(opts.get("porta", "443"))
-        cmd = ["nikto", "-h", alvo, "-p", porta, "-maxtime", "300s", "-nointeractive", "-Format", "txt"]
+        # sem -Format/-o: nikto imprime direto no stdout (evita erro "Unable to open ''")
+        cmd = ["nikto", "-h", alvo, "-p", porta, "-maxtime", "300s", "-nointeractive"]
         if opts.get("ssl", porta == "443"):
             cmd.append("-ssl")
         return cmd
 
     if ferramenta == "nuclei":
         sev = opts.get("severidade", "info,low,medium,high,critical")
-        cmd = ["nuclei", "-u", f"https://{alvo}", "-severity", sev,
+        proto = opts.get("proto", "https")
+        cmd = ["nuclei", "-u", f"{proto}://{alvo}", "-severity", sev,
                "-rate-limit", str(opts.get("rate_limit", 150)),
                "-timeout", str(opts.get("timeout", 5)), "-silent", "-no-color"]
         tags = opts.get("tags", "")
@@ -746,10 +748,9 @@ def _scan_alvo_pipeline(alvo_atual: str, emit, via_label: str = "autopilot"):
     use_ssl = str(porta_nikto) in ("443", "8443") or bool(ai_nikto.get("ssl"))
     emit("ai_decision", data=f"[{alvo_atual}] web: porta {porta_nikto} SSL={use_ssl}")
 
-    run_tool("nikto", {"porta": str(porta_nikto), "ssl": "1" if use_ssl else ""})
-    run_tool("nuclei", {"severidade": "info,low,medium,high,critical"})
-
     proto = "https" if use_ssl else "http"
+    run_tool("nikto", {"porta": str(porta_nikto), "ssl": "1" if use_ssl else ""})
+    run_tool("nuclei", {"severidade": "info,low,medium,high,critical", "proto": proto})
     run_tool("gobuster", {"protocolo": proto, "wordlist": "common", "threads": 20})
 
     # Adiciona ao projeto ativo
