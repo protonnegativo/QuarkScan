@@ -200,9 +200,19 @@
     .proj-row.ativo .pr-actions { display:flex; }
     .pr-btn { background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer; padding:1px 3px; line-height:1; }
     .pr-btn:hover { color:var(--text); background:none; }
-    /* Banner projeto ativo */
-    .proj-ativo-banner { display:none; align-items:center; gap:8px; padding:5px 14px; background:rgba(188,140,255,.12); border-bottom:1px solid rgba(188,140,255,.25); font-size:12px; color:var(--purple); flex-shrink:0; }
-    .proj-ativo-banner.show { display:flex; }
+    /* Seletor de projeto ativo no topbar */
+    .proj-picker { position:relative; display:flex; align-items:center; }
+    .proj-picker-btn { display:flex; align-items:center; gap:6px; padding:5px 10px; border-radius:var(--radius); background:var(--bg3); border:1px solid var(--border); color:var(--muted); font-size:12px; cursor:pointer; white-space:nowrap; max-width:200px; transition:all .15s; }
+    .proj-picker-btn:hover { border-color:var(--purple); color:var(--text); }
+    .proj-picker-btn.has-proj { background:rgba(188,140,255,.12); border-color:rgba(188,140,255,.4); color:var(--purple); }
+    .proj-picker-name { overflow:hidden; text-overflow:ellipsis; max-width:140px; }
+    .proj-picker-dropdown { position:absolute; top:calc(100% + 4px); right:0; min-width:220px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 8px 24px rgba(0,0,0,.4); z-index:500; display:none; overflow:hidden; }
+    .proj-picker-dropdown.open { display:block; }
+    .proj-picker-item { padding:8px 12px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:8px; color:var(--text); transition:background .1s; }
+    .proj-picker-item:hover { background:var(--bg3); }
+    .proj-picker-item.active { color:var(--purple); background:rgba(188,140,255,.1); }
+    .proj-picker-item.none { color:var(--muted); font-style:italic; }
+    .proj-picker-sep { height:1px; background:var(--border); margin:4px 0; }
 
     /* Modal */
     .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:200; display:flex; align-items:center; justify-content:center; }
@@ -344,14 +354,22 @@
   <div class="main">
     <div class="topbar">
       <div class="topbar-title" id="page-title">Executar Scan</div>
-      <button onclick="reloadAll()">↻ Atualizar</button>
-    </div>
-    <!-- Banner projeto ativo -->
-    <div class="proj-ativo-banner" id="proj-ativo-banner">
-      <span>📁</span>
-      <span id="proj-ativo-nome" style="font-weight:600;"></span>
-      <span style="color:var(--muted);font-size:11px;">— scans serão adicionados a este projeto</span>
-      <button onclick="sairDoProjeto()" style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:8px;background:rgba(248,81,73,.15);border-color:rgba(248,81,73,.3);color:var(--red);">Sair do projeto</button>
+      <button onclick="reloadAll()" style="flex-shrink:0;">↻ Atualizar</button>
+      <!-- Seletor de projeto ativo -->
+      <div class="proj-picker" id="proj-picker">
+        <button class="proj-picker-btn" id="proj-picker-btn" onclick="toggleProjetoPicker(event)">
+          <span>📁</span>
+          <span class="proj-picker-name" id="proj-picker-label">Sem projeto</span>
+          <span style="color:var(--muted);font-size:10px;margin-left:2px;">▾</span>
+        </button>
+        <div class="proj-picker-dropdown" id="proj-picker-dropdown">
+          <div class="proj-picker-item none" onclick="selecionarProjetoAtivo(null)">
+            <span>○</span> Nenhum projeto
+          </div>
+          <div class="proj-picker-sep"></div>
+          <div id="proj-picker-list"></div>
+        </div>
+      </div>
     </div>
     <div class="content">
 
@@ -679,8 +697,7 @@
     </div>
     <span class="pw-badge" id="pw-badge-alvos">0 alvos</span>
     <span class="pw-badge" id="pw-badge-scans" style="margin-left:6px;">0 scans</span>
-    <button onclick="entrarModoAtivo()" id="pw-btn-ativar" class="primary" style="font-size:12px;padding:5px 12px;margin-left:12px;">▶ Ativar para Scans</button>
-    <button onclick="sairDoProjeto()" id="pw-btn-desativar" style="display:none;font-size:12px;padding:5px 12px;margin-left:12px;background:rgba(248,81,73,.15);border-color:rgba(248,81,73,.3);color:var(--red);">■ Desativar</button>
+    <span class="pw-badge" id="pw-badge-ativo" style="margin-left:6px;display:none;background:rgba(63,185,80,.15);border-color:rgba(63,185,80,.3);color:var(--green);">● Ativo</span>
   </div>
 
   <!-- Body -->
@@ -828,9 +845,10 @@ async function init() {
   // Recupera projeto ativo do servidor (persiste enquanto o servidor estiver rodando)
   try {
     const pa = await api('/api/projeto-ativo');
-    if (pa && pa.id) { projetoAtivo = pa; atualizarBannerProjeto(); }
+    if (pa && pa.id) { projetoAtivo = pa; }
   } catch {}
   await Promise.all([loadProjetos(), loadFerramentas(), loadStats(), loadDashScans()]);
+  atualizarPickerBtn();
   loadChatSessoes();
 }
 
@@ -876,6 +894,59 @@ let _pwScansAll = [];
 let _pwAlvosAll = [];
 let _pwVulnsAll = [];
 let _pwChatTyping = false;
+let _todosProjetosCache = [];
+
+// ── Picker de projeto (topbar) ─────────────────────────────────────────────
+function toggleProjetoPicker(e) {
+  e.stopPropagation();
+  const dd = document.getElementById('proj-picker-dropdown');
+  dd.classList.toggle('open');
+}
+
+// Fecha o picker ao clicar fora
+document.addEventListener('click', () => {
+  document.getElementById('proj-picker-dropdown')?.classList.remove('open');
+});
+
+async function selecionarProjetoAtivo(proj) {
+  document.getElementById('proj-picker-dropdown').classList.remove('open');
+  projetoAtivo = proj ? {id: proj.id, nome: proj.nome} : null;
+  await api('/api/projeto-ativo', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(proj ? {id: proj.id, nome: proj.nome} : {limpar: true}),
+  });
+  atualizarPickerBtn();
+  atualizarBadgeAtivo();
+  loadProjetos();
+}
+
+function atualizarPickerBtn() {
+  const btn = document.getElementById('proj-picker-btn');
+  const lbl = document.getElementById('proj-picker-label');
+  if (projetoAtivo) {
+    lbl.textContent = projetoAtivo.nome;
+    btn.classList.add('has-proj');
+  } else {
+    lbl.textContent = 'Sem projeto';
+    btn.classList.remove('has-proj');
+  }
+  // Atualiza itens do dropdown
+  const list = document.getElementById('proj-picker-list');
+  list.innerHTML = _todosProjetosCache.map(p => {
+    const isAtivo = projetoAtivo && projetoAtivo.id === p.id;
+    const nome = p.nome.replace(/'/g,"\\'").replace(/</g,'&lt;');
+    return `<div class="proj-picker-item ${isAtivo ? 'active' : ''}" onclick="selecionarProjetoAtivo(${JSON.stringify({id:p.id,nome:p.nome}).replace(/"/g,'&quot;')})">
+      <span>${isAtivo ? '●' : '○'}</span> ${nome}
+    </div>`;
+  }).join('');
+}
+
+function atualizarBadgeAtivo() {
+  const badge = document.getElementById('pw-badge-ativo');
+  if (!badge) return;
+  const isAtivo = projetoAtivo && _pwCtx && projetoAtivo.id === _pwCtx.projeto.id;
+  badge.style.display = isAtivo ? 'inline-block' : 'none';
+}
 
 // Abre o workspace do projeto (view imersiva)
 async function entrarNoProjeto(id, nome) {
@@ -888,7 +959,7 @@ async function entrarNoProjeto(id, nome) {
     `<div class="chat-msg assistant"><div class="chat-bubble">Olá! Tenho acesso completo aos dados deste projeto. Posso analisar vulnerabilidades, sugerir próximos passos, explicar resultados ou responder qualquer dúvida técnica. Como posso ajudar?</div></div>`;
 
   await carregarWorkspace(id);
-  atualizarBotoesWorkspace();
+  atualizarBadgeAtivo();
 }
 
 async function carregarWorkspace(id) {
@@ -924,47 +995,6 @@ async function carregarWorkspace(id) {
 function fecharWorkspace() {
   document.getElementById('proj-workspace').classList.remove('open');
   _pwCtx = null;
-}
-
-// Ativa o projeto para receber scans automaticamente
-async function entrarModoAtivo() {
-  if (!_pwCtx) return;
-  const p = _pwCtx.projeto;
-  projetoAtivo = {id: p.id, nome: p.nome};
-  await api('/api/projeto-ativo', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({id: p.id, nome: p.nome}),
-  });
-  atualizarBannerProjeto();
-  atualizarBotoesWorkspace();
-  loadProjetos();
-}
-
-async function sairDoProjeto() {
-  projetoAtivo = null;
-  await api('/api/projeto-ativo', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({limpar: true}),
-  });
-  atualizarBannerProjeto();
-  atualizarBotoesWorkspace();
-  loadProjetos();
-}
-
-function atualizarBotoesWorkspace() {
-  const isAtivo = projetoAtivo && _pwCtx && projetoAtivo.id === _pwCtx.projeto.id;
-  document.getElementById('pw-btn-ativar').style.display = isAtivo ? 'none' : 'inline-block';
-  document.getElementById('pw-btn-desativar').style.display = isAtivo ? 'inline-block' : 'none';
-}
-
-function atualizarBannerProjeto() {
-  const banner = document.getElementById('proj-ativo-banner');
-  if (projetoAtivo) {
-    document.getElementById('proj-ativo-nome').textContent = projetoAtivo.nome;
-    banner.classList.add('show');
-  } else {
-    banner.classList.remove('show');
-  }
 }
 
 // ── Abas do workspace ──────────────────────────────────────────────────────
@@ -1176,6 +1206,7 @@ async function loadProjetos() {
   const list = document.getElementById('projetos-list');
   try {
     const projs = await api('/api/projetos');
+    _todosProjetosCache = projs;
 
     // Preenche select de vulnerabilidades com todos os alvos
     try {
@@ -1186,6 +1217,9 @@ async function loadProjetos() {
         todosAlvos.map(a => `<option value="${a.alvo}">${a.alvo}</option>`).join('');
     } catch {}
 
+    // Atualiza picker do topbar
+    atualizarPickerBtn();
+
     if (!projs.length) {
       list.innerHTML = `<div style="padding:8px 14px;color:var(--muted);font-size:12px;">Nenhum projeto. Clique em + para criar.</div>`;
       return;
@@ -1195,10 +1229,10 @@ async function loadProjetos() {
       const isAtivo = projetoAtivo && projetoAtivo.id === p.id;
       const nome = p.nome.replace(/'/g,"\\'").replace(/"/g,'&quot;');
       const alvosCount = (p.alvos || []).length;
-      return `<div class="proj-row ${isAtivo ? 'ativo' : ''}" onclick="entrarNoProjeto(${p.id},'${nome}')" title="${isAtivo ? 'Projeto ativo' : 'Clique para entrar'}">
-        <span>${isAtivo ? '▶' : '📁'}</span>
+      return `<div class="proj-row ${isAtivo ? 'ativo' : ''}" onclick="entrarNoProjeto(${p.id},'${nome}')" title="Abrir workspace do projeto">
+        <span>📁</span>
         <span class="pr-name">${p.nome}</span>
-        <span style="font-size:10px;color:var(--muted);">${alvosCount}a</span>
+        <span style="font-size:10px;color:${isAtivo ? 'var(--green)' : 'var(--muted)'};">${isAtivo ? '●' : alvosCount+'a'}</span>
         <span class="pr-actions">
           <button class="pr-btn" onclick="event.stopPropagation();abrirModalProjeto(${p.id})" title="Editar">✏</button>
           <button class="pr-btn" onclick="event.stopPropagation();deletarProjeto(${p.id},'${nome}')" title="Excluir" style="color:var(--red);">✕</button>
