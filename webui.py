@@ -670,31 +670,27 @@ def _run_phase(ferramenta: str, alvo: str, opts: dict) -> tuple[int, str]:
         return 1, str(e)
 
 
-def _autopilot_pipeline(alvo: str, q: queue.Queue):
-    """Pipeline PTES completo com IA decidindo parâmetros entre fases."""
-    def emit(tipo, **kwargs):
-        q.put({"type": tipo, **kwargs})
+def _scan_alvo_pipeline(alvo_atual: str, emit, via_label: str = "autopilot"):
+    """Executa o pipeline completo (nmap→whatweb→nikto/nuclei→gobuster) para UM alvo.
+    Retorna o raw_output consolidado de todos os scans desse alvo."""
 
-    def run_phase(label: str, ferramenta: str, opts: dict):
-        emit("phase_start", phase=label, ferramenta=ferramenta, opts=opts)
+    def run_tool(ferramenta: str, opts: dict) -> str | None:
         try:
-            comando = _build_command(ferramenta, alvo, opts)
-            emit("cmd", data=" ".join(comando))
+            comando = _build_command(ferramenta, alvo_atual, opts)
+            emit("cmd", data=f"[{alvo_atual}] $ {' '.join(comando)}")
         except ValueError as e:
             emit("error", data=str(e))
             return None
 
-        import time, select as _sel
-        import subprocess
         raw_lines = []
         inicio = time.time()
         try:
             proc = subprocess.Popen(
-                ["stdbuf", "-oL", "-eL"] + _build_command(ferramenta, alvo, opts),
+                ["stdbuf", "-oL", "-eL"] + _build_command(ferramenta, alvo_atual, opts),
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
             )
             while True:
-                fds = _sel.select([proc.stdout, proc.stderr], [], [], 1.0)[0]
+                fds = select.select([proc.stdout, proc.stderr], [], [], 1.0)[0]
                 for fd in fds:
                     linha = fd.readline()
                     if linha:
@@ -712,97 +708,158 @@ def _autopilot_pipeline(alvo: str, q: queue.Queue):
             proc.wait()
             duracao_ms = int((time.time() - inicio) * 1000)
             raw = "\n".join(raw_lines)
-            storage.salvar(alvo, ferramenta, raw, parametros={**opts, "via": "autopilot"}, raw_output=raw)
-            storage.salvar_metrica(ferramenta, alvo, proc.returncode, duracao_ms, proc.returncode == 0)
-            scan_id = storage.ultimo_id(alvo, ferramenta)
-            emit("phase_done", phase=label, ferramenta=ferramenta, scan_id=scan_id, duracao_ms=duracao_ms, exit_code=proc.returncode)
+            storage.salvar(alvo_atual, ferramenta, raw,
+                           parametros={"via": via_label}, raw_output=raw)
+            storage.salvar_metrica(ferramenta, alvo_atual, proc.returncode, duracao_ms, proc.returncode == 0)
+            scan_id = storage.ultimo_id(alvo_atual, ferramenta)
+            emit("phase_done", ferramenta=ferramenta, alvo=alvo_atual,
+                 scan_id=scan_id, duracao_ms=duracao_ms, exit_code=proc.returncode)
             return raw
         except FileNotFoundError:
-            emit("error", data=f"Ferramenta '{ferramenta}' não encontrada.")
+            emit("info", data=f"Ferramenta '{ferramenta}' não encontrada — pulando.")
             return None
         except Exception as e:
-            emit("error", data=str(e))
+            emit("info", data=f"Erro em {ferramenta}: {e}")
             return None
 
+    # Porta scan rápido
+    nmap_quick = run_tool("nmap", {"argumentos": "-sT --top-ports 1000"}) or ""
+
+    # IA decide quais portas detalhar
+    open_ports = _extract_open_ports(nmap_quick)
+    if open_ports:
+        emit("ai_thinking", data=f"[{alvo_atual}] IA analisando {len(open_ports)} porta(s) abertas…")
+        ai_p = _ai_decide_next_phase("nmap top-1000", nmap_quick, alvo_atual)
+        nmap_args = ai_p.get("argumentos", f"-sV -sC -p {','.join(open_ports)}")
+    else:
+        nmap_args = "-sV -sC --top-ports 100"
+    emit("ai_decision", data=f"[{alvo_atual}] nmap: {nmap_args}")
+    nmap_sv = run_tool("nmap", {"argumentos": nmap_args}) or ""
+
+    # Fingerprinting web
+    run_tool("whatweb", {"agressividade": 1})
+
+    # Decide porta/protocolo para scans web
+    http_ports = _extract_http_ports(nmap_sv) or _extract_http_ports(nmap_quick)
+    ai_nikto = _ai_decide_next_phase("service detection", nmap_sv, alvo_atual)
+    porta_nikto = ai_nikto.get("porta", http_ports[0] if http_ports else "443")
+    use_ssl = str(porta_nikto) in ("443", "8443") or bool(ai_nikto.get("ssl"))
+    emit("ai_decision", data=f"[{alvo_atual}] web: porta {porta_nikto} SSL={use_ssl}")
+
+    run_tool("nikto", {"porta": str(porta_nikto), "ssl": "1" if use_ssl else ""})
+    run_tool("nuclei", {"severidade": "critical,high,medium"})
+
+    proto = "https" if use_ssl else "http"
+    run_tool("gobuster", {"protocolo": proto, "wordlist": "common", "threads": 20})
+
+    # Adiciona ao projeto ativo
+    if _projeto_ativo:
+        storage.projeto_adicionar_alvo(_projeto_ativo["id"], alvo_atual)
+
+    return nmap_sv or nmap_quick
+
+
+def _autopilot_pipeline(alvo: str, q: queue.Queue):
+    """Pipeline PTES completo: subfinder → pipeline por subdomínio → relatório IA."""
+    def emit(tipo, **kwargs):
+        q.put({"type": tipo, **kwargs})
+
+    todos_alvos_scaneados = []
+
     try:
-        # ── Fase 1: Descoberta passiva de subdomínios ──────────────────────
+        # ── Fase 1: Descoberta de subdomínios ─────────────────────────────
         emit("phase_header", text="Fase 1 — Reconhecimento Passivo (subfinder)")
-        sf_out = run_phase("Reconhecimento Passivo", "subfinder", {}) or ""
-        subdomains = [s.strip() for s in sf_out.splitlines() if s.strip() and alvo in s]
-        emit("info", data=f"Subdomínios encontrados: {len(subdomains)}")
 
-        # ── Fase 2: Port scan rápido (top-1000) ───────────────────────────
-        emit("phase_header", text="Fase 2 — Port Scan (nmap top-1000)")
-        nmap_quick = run_phase("Port Scan Rápido", "nmap", {"argumentos": "-sT --top-ports 1000"}) or ""
+        raw_sf_lines = []
+        inicio = time.time()
+        try:
+            proc = subprocess.Popen(
+                ["stdbuf", "-oL", "-eL"] + _build_command("subfinder", alvo, {}),
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
+            )
+            while True:
+                fds = select.select([proc.stdout, proc.stderr], [], [], 1.0)[0]
+                for fd in fds:
+                    linha = fd.readline()
+                    if linha:
+                        texto = linha.decode("utf-8", errors="replace").rstrip("\n")
+                        raw_sf_lines.append(texto)
+                        emit("line", data=texto)
+                if proc.poll() is not None:
+                    for fd in [proc.stdout, proc.stderr]:
+                        for linha in fd:
+                            texto = linha.decode("utf-8", errors="replace").rstrip("\n")
+                            if texto:
+                                raw_sf_lines.append(texto)
+                                emit("line", data=texto)
+                    break
+            proc.wait()
+        except Exception as e:
+            emit("info", data=f"subfinder: {e}")
 
-        # ── Fase 3: IA decide quais portas detalhar ────────────────────────
-        emit("phase_header", text="Fase 3 — Análise IA + Service Detection")
-        emit("ai_thinking", data="IA analisando portas abertas para definir próxima fase…")
-        open_ports = _extract_open_ports(nmap_quick)
-        if open_ports:
-            ai_params = _ai_decide_next_phase("nmap top-1000", nmap_quick, alvo)
-            nmap_args = ai_params.get("argumentos", f"-sV -sC -p {','.join(open_ports)}")
-            emit("ai_decision", data=f"IA escolheu: nmap {nmap_args}")
-        else:
-            nmap_args = "-sV -sC --top-ports 100"
-            emit("ai_decision", data=f"Sem portas identificadas — usando: nmap {nmap_args}")
-        nmap_sv = run_phase("Service Detection", "nmap", {"argumentos": nmap_args}) or ""
+        sf_raw = "\n".join(raw_sf_lines)
+        storage.salvar(alvo, "subfinder", sf_raw, parametros={"via": "autopilot"}, raw_output=sf_raw)
+        if _projeto_ativo:
+            storage.projeto_adicionar_alvo(_projeto_ativo["id"], alvo)
 
-        # ── Fase 4: Fingerprinting web ─────────────────────────────────────
-        emit("phase_header", text="Fase 4 — Fingerprinting Web (whatweb + headers)")
-        run_phase("WhatWeb", "whatweb", {"agressividade": 1})
+        # Extrai subdomínios válidos do output
+        subdomains = sorted({
+            s.strip().lower() for s in raw_sf_lines
+            if s.strip() and alvo in s.strip() and s.strip() != alvo
+            and not s.strip().startswith("[") and " " not in s.strip()
+        })
+        emit("info", data=f"Subdomínios encontrados: {len(subdomains)} — {', '.join(subdomains[:10])}{'…' if len(subdomains)>10 else ''}")
 
-        # ── Fase 5: IA decide se há serviço web e qual protocolo ───────────
-        emit("phase_header", text="Fase 5 — Análise de Vulnerabilidades (nikto + nuclei)")
-        emit("ai_thinking", data="IA decidindo porta e protocolo para nikto/nuclei…")
-        http_ports = _extract_http_ports(nmap_sv) or _extract_http_ports(nmap_quick) or ["443"]
-        ai_nikto = _ai_decide_next_phase("service detection", nmap_sv, alvo)
-        porta_nikto = ai_nikto.get("porta", http_ports[0] if http_ports else "443")
-        use_ssl = str(porta_nikto) in ("443", "8443") or ai_nikto.get("ssl", False)
-        emit("ai_decision", data=f"IA escolheu: nikto na porta {porta_nikto} (SSL={use_ssl})")
-        run_phase("Nikto", "nikto", {"porta": str(porta_nikto), "ssl": "1" if use_ssl else ""})
-        run_phase("Nuclei", "nuclei", {"severidade": "critical,high,medium"})
+        # Lista de alvos: domínio raiz + subdomínios (máx 10 para não explodir)
+        alvos_pipeline = [alvo] + subdomains[:10]
+        emit("phase_header", text=f"Iniciando pipeline para {len(alvos_pipeline)} alvo(s): {', '.join(alvos_pipeline)}")
 
-        # ── Fase 6: Directory enumeration em serviços web ──────────────────
-        emit("phase_header", text="Fase 6 — Enumeração de Diretórios (gobuster)")
-        proto = "https" if use_ssl else "http"
-        emit("ai_decision", data=f"IA escolheu: gobuster via {proto}://{alvo}:{porta_nikto}")
-        run_phase("Gobuster", "gobuster", {"protocolo": proto, "wordlist": "common", "threads": 20})
+        # ── Fase 2-6 para cada alvo ────────────────────────────────────────
+        for i, alvo_atual in enumerate(alvos_pipeline, 1):
+            emit("phase_header", text=f"[{i}/{len(alvos_pipeline)}] Pipeline PTES → {alvo_atual}")
+            _scan_alvo_pipeline(alvo_atual, emit)
+            todos_alvos_scaneados.append(alvo_atual)
+            emit("alvo_concluido", alvo=alvo_atual, index=i, total=len(alvos_pipeline))
 
-        # ── Relatório final ────────────────────────────────────────────────
-        emit("phase_header", text="Pipeline PTES Concluído — Gerando Relatório IA")
-        emit("ai_thinking", data="LLM consolidando todos os resultados…")
-        scans = storage.historico(alvo, limite=10)
+        # ── Relatório final consolidado ────────────────────────────────────
+        emit("phase_header", text="Relatório Final Consolidado — IA analisando todos os alvos")
+        emit("ai_thinking", data="LLM consolidando resultados de todos os subdomínios…")
+
         blocos = []
-        for s in scans:
-            conteudo = s.get("raw_output") or s.get("resultado") or ""
-            if conteudo:
-                blocos.append(f"=== {s['ferramenta'].upper()} ===\n{conteudo[:3000]}")
+        for a in todos_alvos_scaneados:
+            scans = storage.historico(a, limite=6)
+            for s in scans:
+                conteudo = s.get("raw_output") or s.get("resultado") or ""
+                if conteudo:
+                    blocos.append(f"=== {a} / {s['ferramenta'].upper()} ===\n{conteudo[:2000]}")
+
         if blocos:
             try:
                 from llm import criar_llm
                 llm = criar_llm("supervisor")
-                prompt = f"""Você é um especialista em pentest. Analise o pipeline PTES completo abaixo para "{alvo}" e produza um relatório consolidado com:
+                alvos_str = ", ".join(todos_alvos_scaneados)
+                prompt = f"""Você é um especialista em pentest. Analise o pipeline PTES completo abaixo para o domínio "{alvo}" e seus subdomínios ({alvos_str}) e produza um relatório consolidado:
+
 1. Resumo Executivo
-2. Superfície de Ataque
-3. Vulnerabilidades (Crítico/Alto/Médio)
-4. Top 3 Vetores de Ataque
-5. Recomendações Imediatas
+2. Superfície de Ataque (por subdomínio)
+3. Vulnerabilidades por severidade (Crítico / Alto / Médio)
+4. Top 3 Vetores de Ataque mais promissores
+5. Recomendações Imediatas por prioridade
 
 RESULTADOS:
-{chr(10).join(blocos)}"""
+{chr(10).join(blocos[:20])}"""
                 resposta = llm.invoke(prompt)
                 analise = getattr(resposta, "content", str(resposta)).strip()
-                for s in scans:
-                    storage.salvar_llm_analysis(s["id"], analise)
+                for a in todos_alvos_scaneados:
+                    scans = storage.historico(a, limite=6)
+                    for s in scans:
+                        storage.salvar_llm_analysis(s["id"], analise)
                 emit("final_report", data=analise)
             except Exception as e:
                 emit("info", data=f"Relatório IA falhou: {e}")
 
-        if _projeto_ativo:
-            storage.projeto_adicionar_alvo(_projeto_ativo["id"], alvo)
-
-        emit("done", message="Pipeline PTES completo.", projeto_ativo=_projeto_ativo)
+        emit("done", message=f"Pipeline PTES concluído para {len(todos_alvos_scaneados)} alvo(s).",
+             projeto_ativo=_projeto_ativo, alvos=todos_alvos_scaneados)
 
     except Exception as e:
         emit("error", data=f"Autopilot falhou: {e}")

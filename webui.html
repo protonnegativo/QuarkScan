@@ -1690,7 +1690,8 @@ function runAutopilot() {
       case 'ai_thinking':  termLine(`🤔 ${msg.data}`, 'ai-think'); break;
       case 'ai_decision':  termLine(`✅ ${msg.data}`, 'ai-dec'); break;
       case 'info':         termLine(`ℹ ${msg.data}`, 'info'); break;
-      case 'phase_done':   termLine(`✓ ${msg.ferramenta} concluído em ${(msg.duracao_ms/1000).toFixed(1)}s — scan #${msg.scan_id}`, 'ok'); break;
+      case 'phase_done':   termLine(`✓ ${msg.ferramenta}${msg.alvo ? ' ['+msg.alvo+']' : ''} concluído em ${(msg.duracao_ms/1000).toFixed(1)}s — scan #${msg.scan_id}`, 'ok'); break;
+      case 'alvo_concluido': termLine(`\n◆ Alvo ${msg.index}/${msg.total} concluído: ${msg.alvo}`, 'phase'); break;
       case 'final_report':
         document.getElementById('ai-result-wrap').style.display = 'block';
         document.getElementById('ai-result-text').textContent = msg.data;
