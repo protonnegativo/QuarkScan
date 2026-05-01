@@ -36,6 +36,23 @@ def _smart_truncate(text: str, max_chars: int) -> str:
     tail_len = max_chars - head_len - 50
     return text[:head_len] + "\n\n... [OUTPUT TRUNCADO PELA IA] ...\n\n" + text[-tail_len:]
 
+def _simplify_ai_reasoning(text: str) -> str:
+    """Simplifica o raciocínio IA para apenas as linhas essenciais (até 2 linhas concisas)."""
+    if not text:
+        return ""
+    lines = text.strip().split('\n')
+    # Pega a primeira ou segunda linha que tenha conteúdo substantivo
+    resultado = []
+    for line in lines[:3]:
+        line = line.strip()
+        if line and len(line) > 10:  # Ignora linhas muito curtas
+            # Remove bullets, asteriscos, etc
+            line = line.lstrip('*•- ').strip()
+            resultado.append(line)
+            if len(resultado) >= 2:
+                break
+    return ' • '.join(resultado) if resultado else text[:100]
+
 _HTML_PATH = os.path.join(os.path.dirname(__file__), "webui.html")
 
 
@@ -929,9 +946,10 @@ Regra ABSOLUTA: Não pare e não emita o relatório final até invocar explicita
                         conteudo = getattr(msg, "content", "")
                         if isinstance(conteudo, list):
                             conteudo = "\n".join(item.get("text", "") if isinstance(item, dict) else str(item) for item in conteudo)
-                        
+
                         if conteudo:
-                            emit("ai_reasoning", node=node_name, data=conteudo)
+                            resumo = _simplify_ai_reasoning(conteudo)
+                            emit("ai_reasoning", node=node_name, data=resumo)
                         
                         if hasattr(msg, "tool_calls") and msg.tool_calls:
                             for tc in msg.tool_calls:
@@ -941,7 +959,9 @@ Regra ABSOLUTA: Não pare e não emita o relatório final até invocar explicita
                         conteudo = getattr(msg, "content", "")
                         if "[CACHE" in conteudo:
                             emit("info", data=f"[{getattr(msg, 'name', 'tool')}] Utilizou cache local. Nenhum log bruto emitido.")
-                        emit("ai_reasoning", node=getattr(msg, "name", "tool"), data=f"Resultado recebido pelo supervisor:\n{conteudo}")
+                        else:
+                            resumo = _simplify_ai_reasoning(conteudo)
+                            emit("ai_reasoning", node=getattr(msg, "name", "tool"), data=f"Resultado: {resumo}")
 
             # Faz o polling do banco de dados para pegar os outputs reais recém salvos
             with storage._conn() as conn:

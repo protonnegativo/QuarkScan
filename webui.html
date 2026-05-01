@@ -166,6 +166,13 @@
     .status-dot.done    { background:var(--accent); animation:none; }
     @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.4;} }
 
+    /* Scan em andamento — estilo destacado na tabela */
+    .scan-row-running { background:rgba(63,185,80,.08) !important; border-left:3px solid var(--green); }
+    .scan-row-running td { padding:9px 10px; }
+    .scan-badge-running { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; background:rgba(63,185,80,.15); color:var(--green); border:1px solid rgba(63,185,80,.3); }
+    .scan-badge-running .dot { width:6px; height:6px; border-radius:50%; background:var(--green); animation:pulse 1.2s ease-in-out infinite; }
+    .scan-spinner-small { display:inline-block; width:10px; height:10px; border:2px solid rgba(63,185,80,.2); border-top-color:var(--green); border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; margin-right:4px; }
+
     /* Detail panel */
     .detail-panel { position:fixed; top:0; right:0; width:55vw; height:100vh; background:var(--bg2); border-left:1px solid var(--border); display:flex; flex-direction:column; z-index:100; transform:translateX(100%); transition:transform .25s ease; }
     .detail-panel.open { transform:translateX(0); }
@@ -883,6 +890,8 @@ let debounceTimer = null;
 let currentTool = 'nmap';
 let activeSSE = null;
 let lastRunAlvo = null;
+let currentRunningTool = null;  // ferramenta em execução
+let currentRunningAlvo = null;  // alvo em execução
 let chatSessionId = 'default';
 let chatTyping = false;
 let modalProjAlvos = [];   // alvos no modal atual
@@ -1474,6 +1483,47 @@ async function loadDashScans() {
   } catch(e) { tbody.innerHTML = `<tr><td colspan="5" style="color:var(--red)">${e.message}</td></tr>`; }
 }
 
+// ── Highlight Running Scans ─────────────────────────────────────────────────
+function highlightRunningScans() {
+  document.querySelectorAll('table.scan-table tbody tr').forEach(row => {
+    row.classList.remove('scan-row-running');
+    // Remover badge anterior
+    const oldBadge = row.querySelector('.scan-badge-running');
+    if (oldBadge) oldBadge.remove();
+  });
+
+  if (!currentRunningTool || !currentRunningAlvo) return;
+
+  // Procurar nas linhas o scan em andamento
+  document.querySelectorAll('table.scan-table tbody tr').forEach(row => {
+    const cells = row.querySelectorAll('td');
+    if (cells.length === 0) return;
+
+    // Variar conforme a tabela (podem ser diferentes formatos)
+    let alvo = null, tool = null;
+
+    if (cells.length === 5) {
+      // Dashboard: alvo, ferramenta, data, raw, ia
+      alvo = cells[0]?.textContent?.trim();
+      tool = cells[1]?.querySelector('span')?.className?.match(/\bbadge-tool\.(\w+)/)?.[1];
+    } else if (cells.length === 7) {
+      // Scans list: id, alvo, ferramenta, params, data, raw, ia
+      alvo = cells[1]?.textContent?.trim();
+      tool = cells[2]?.querySelector('span')?.className?.match(/\bbadge-tool\.(\w+)/)?.[1];
+    }
+
+    if (alvo === currentRunningAlvo && tool === currentRunningTool) {
+      row.classList.add('scan-row-running');
+      // Adicionar badge na primeira célula
+      const badge = document.createElement('span');
+      badge.className = 'scan-badge-running';
+      badge.innerHTML = '<div class="dot"></div>Em execução…';
+      cells[0].insertAdjacentElement('afterbegin', badge);
+      cells[0].appendChild(document.createElement('br'));
+    }
+  });
+}
+
 // ── Scans list ─────────────────────────────────────────────────────────────
 function debounceLoadScans() {
   clearTimeout(debounceTimer);
@@ -1780,7 +1830,12 @@ function runAutopilot() {
     const msg = JSON.parse(e.data);
     switch (msg.type) {
       case 'phase_header': termLine(`\n══ ${msg.text} ══`, 'phase', 'scans'); termLine(`\n══ ${msg.text} ══`, 'phase', 'ai'); break;
-      case 'phase_start':  termLine(`▶ ${msg.ferramenta}`, 'cmd', 'scans'); break;
+      case 'phase_start':
+        currentRunningTool = msg.ferramenta;
+        currentRunningAlvo = alvo;
+        termLine(`▶ ${msg.ferramenta}`, 'cmd', 'scans');
+        highlightRunningScans();
+        break;
       case 'cmd':          termLine(`$ ${msg.data}`, 'cmd', 'scans'); break;
       case 'line':         termLine(msg.data, 'out', 'scans'); break;
       case 'ai_thinking':  termLine(`🤔 ${msg.data}`, 'ai-think', 'ai'); break;
@@ -1799,6 +1854,9 @@ function runAutopilot() {
         termLine('\n⚡ Processo autônomo finalizado.', 'ok', 'ai');
         setTermStatus('done', 'scans');
         setTermStatus('done', 'ai');
+        currentRunningTool = null;
+        currentRunningAlvo = null;
+        highlightRunningScans();
         stopUI();
         document.getElementById('analyze-bar').style.display = 'flex';
         sse.close(); activeSSE = null;
@@ -1809,6 +1867,9 @@ function runAutopilot() {
         termLine(`\n✗ Erro: ${msg.data}`, 'err', 'ai');
         setTermStatus('error', 'scans');
         setTermStatus('error', 'ai');
+        currentRunningTool = null;
+        currentRunningAlvo = null;
+        highlightRunningScans();
         stopUI();
         sse.close(); activeSSE = null;
         break;
@@ -1972,6 +2033,8 @@ function runScan() {
   if (activeSSE) { activeSSE.close(); activeSSE = null; }
 
   lastRunAlvo = alvo;
+  currentRunningTool = currentTool;
+  currentRunningAlvo = alvo;
   startUI();
 
   clearTerminal();
@@ -1979,6 +2042,9 @@ function runScan() {
   setTermStatus('', 'ai');
   document.getElementById('term-title-scans').textContent = `${currentTool} → ${alvo}`;
   document.getElementById('term-title-ai').textContent = `(Scan Manual — Sem IA)`;
+
+  // Destacar o scan em andamento na tabela
+  highlightRunningScans();
 
   const opts   = getOpts();
   const params = new URLSearchParams({alvo, ferramenta: currentTool, ...opts});
@@ -2026,6 +2092,9 @@ function runScan() {
       termLine(`Scan #${msg.scan_id} — ${dur}s`, 'ok', 'scans');
       setTermStatus('done', 'scans');
       stopUI();
+      currentRunningTool = null;
+      currentRunningAlvo = null;
+      highlightRunningScans();
       document.getElementById('analyze-bar').style.display = 'flex';
       document.getElementById('analyze-info').textContent =
         `Scan #${msg.scan_id} salvo. Deseja gerar análise IA sobre todos os resultados de "${alvo}"?`;
@@ -2036,6 +2105,9 @@ function runScan() {
       termLine(`❌ ERRO: ${msg.data}`, 'err', 'scans');
       setTermStatus('error', 'scans');
       stopUI();
+      currentRunningTool = null;
+      currentRunningAlvo = null;
+      highlightRunningScans();
       sse.close(); activeSSE = null;
     }
   };
