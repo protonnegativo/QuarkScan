@@ -8,6 +8,7 @@ Porta:     http://localhost:5000
 import json
 import os
 import queue
+import signal
 import select
 import subprocess
 import sys
@@ -26,6 +27,14 @@ app.config["JSON_SORT_KEYS"] = False
 
 # Projeto ativo global (por instância do servidor)
 _projeto_ativo: dict | None = None  # {"id": int, "nome": str}
+
+def _smart_truncate(text: str, max_chars: int) -> str:
+    """Preserva o início e o final de outputs longos (65% head / 35% tail)."""
+    if not text or len(text) <= max_chars:
+        return text
+    head_len = int(max_chars * 0.65)
+    tail_len = max_chars - head_len - 50
+    return text[:head_len] + "\n\n... [OUTPUT TRUNCADO PELA IA] ...\n\n" + text[-tail_len:]
 
 _HTML_PATH = os.path.join(os.path.dirname(__file__), "webui.html")
 
@@ -88,10 +97,53 @@ def api_stats():
         total_vulns  = conn.execute("SELECT COUNT(*) AS n FROM vulnerabilidades WHERE status!='falso-positivo'").fetchone()["n"]
         vulns_crit   = conn.execute("SELECT COUNT(*) AS n FROM vulnerabilidades WHERE severidade='critical' AND status!='falso-positivo'").fetchone()["n"]
         vulns_high   = conn.execute("SELECT COUNT(*) AS n FROM vulnerabilidades WHERE severidade='high' AND status!='falso-positivo'").fetchone()["n"]
+        vulns_med    = conn.execute("SELECT COUNT(*) AS n FROM vulnerabilidades WHERE severidade='medium' AND status!='falso-positivo'").fetchone()["n"]
+        vulns_low    = conn.execute("SELECT COUNT(*) AS n FROM vulnerabilidades WHERE severidade='low' AND status!='falso-positivo'").fetchone()["n"]
+        vulns_info   = conn.execute("SELECT COUNT(*) AS n FROM vulnerabilidades WHERE severidade='info' AND status!='falso-positivo'").fetchone()["n"]
     return jsonify({
         "total_scans": total_scans, "total_alvos": total_alvos,
         "total_vulns": total_vulns, "vulns_criticas": vulns_crit, "vulns_altas": vulns_high,
+        "vulns_medias": vulns_med, "vulns_baixas": vulns_low, "vulns_info": vulns_info,
     })
+
+
+# ─── Controle de Processos (Pause / Resume / Stop) ────────────────────────────
+
+def _get_all_descendants(parent_pid):
+    descendants = []
+    try:
+        out = subprocess.check_output(["pgrep", "-P", str(parent_pid)])
+        children = [int(p) for p in out.split()]
+        for child in children:
+            descendants.append(child)
+            descendants.extend(_get_all_descendants(child))
+    except Exception:
+        pass
+    return descendants
+
+@app.route("/api/process/pause", methods=["POST"])
+def api_process_pause():
+    pids = _get_all_descendants(os.getpid())
+    for pid in pids:
+        try: os.kill(pid, signal.SIGSTOP)
+        except Exception: pass
+    return jsonify({"ok": True, "pids_paused": len(pids)})
+
+@app.route("/api/process/resume", methods=["POST"])
+def api_process_resume():
+    pids = _get_all_descendants(os.getpid())
+    for pid in pids:
+        try: os.kill(pid, signal.SIGCONT)
+        except Exception: pass
+    return jsonify({"ok": True, "pids_resumed": len(pids)})
+
+@app.route("/api/process/stop", methods=["POST"])
+def api_process_stop():
+    pids = _get_all_descendants(os.getpid())
+    for pid in pids:
+        try: os.kill(pid, signal.SIGTERM)
+        except Exception: pass
+    return jsonify({"ok": True, "pids_stopped": len(pids)})
 
 
 # ─── Execução de scans direta (sem LLM) ──────────────────────────────────────
@@ -160,7 +212,11 @@ def _run_scan_streaming(ferramenta: str, alvo: str, opts: dict, q: queue.Queue):
         comando = _build_command(ferramenta, alvo, opts)
         q.put({"type": "cmd", "data": " ".join(comando)})
 
+        # Enviar header de início com timestamp
         inicio = time.time()
+        inicio_iso = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(inicio))
+        q.put({"type": "separator", "data": f"🔧 {ferramenta.upper()} — {alvo} ({inicio_iso})"})
+
         raw_lines = []
 
         # stdbuf -oL força line-buffering no stdout do processo filho,
@@ -180,7 +236,9 @@ def _run_scan_streaming(ferramenta: str, alvo: str, opts: dict, q: queue.Queue):
                 if linha:
                     texto = linha.decode("utf-8", errors="replace").rstrip("\n")
                     raw_lines.append(texto)
-                    q.put({"type": "line", "data": texto})
+                    # Enviar com timestamp de cada linha
+                    current_time = time.strftime("%H:%M:%S", time.localtime())
+                    q.put({"type": "line", "data": texto, "timestamp": current_time})
             if proc.poll() is not None:
                 # Drena o que sobrou nos buffers
                 for fd in [proc.stdout, proc.stderr]:
@@ -188,7 +246,8 @@ def _run_scan_streaming(ferramenta: str, alvo: str, opts: dict, q: queue.Queue):
                         texto = linha.decode("utf-8", errors="replace").rstrip("\n")
                         if texto:
                             raw_lines.append(texto)
-                            q.put({"type": "line", "data": texto})
+                            current_time = time.strftime("%H:%M:%S", time.localtime())
+                            q.put({"type": "line", "data": texto, "timestamp": current_time})
                 break
 
         proc.wait()
@@ -206,6 +265,23 @@ def _run_scan_streaming(ferramenta: str, alvo: str, opts: dict, q: queue.Queue):
         scan_id = storage.ultimo_id(alvo, ferramenta)
         if _projeto_ativo:
             storage.projeto_adicionar_alvo(_projeto_ativo["id"], alvo)
+
+        # Status final com verificação de sincronização
+        fim_iso = time.strftime("%H:%M:%S", time.localtime())
+        status = "sucesso" if proc.returncode == 0 else "erro"
+        q.put({
+            "type": "status_final",
+            "status": status,
+            "exit_code": proc.returncode,
+            "duracao_ms": duracao_ms,
+            "linhas": len(raw_lines),
+            "inicio": inicio_iso,
+            "fim": fim_iso,
+            "scan_id": scan_id,
+            "projeto_ativo": _projeto_ativo,
+            "sincronizado": True  # Confirma que foi salvo no BD
+        })
+
         q.put({"type": "done", "exit_code": proc.returncode, "duracao_ms": duracao_ms, "scan_id": scan_id, "projeto_ativo": _projeto_ativo})
 
     except ValueError as e:
@@ -214,6 +290,15 @@ def _run_scan_streaming(ferramenta: str, alvo: str, opts: dict, q: queue.Queue):
         q.put({"type": "error", "data": f"Ferramenta '{ferramenta}' não encontrada no sistema."})
     except Exception as e:
         q.put({"type": "error", "data": str(e)})
+
+
+@app.route("/api/scan/verificar-sincronizacao/<int:scan_id>")
+def api_verificar_sincronizacao(scan_id):
+    """Verifica se o scan foi sincronizado com o banco de dados."""
+    scan = storage.scan_por_id(scan_id)
+    if not scan:
+        return jsonify({"sincronizado": False, "motivo": "Scan não encontrado"}), 404
+    return jsonify({"sincronizado": True, "scan_id": scan_id, "raw_output": bool(scan.get("raw_output"))})
 
 
 @app.route("/api/run")
@@ -371,7 +456,7 @@ def api_projeto_chat(pid):
         for s in scans:
             conteudo = s.get("raw_output") or s.get("resultado") or ""
             if conteudo:
-                blocos_ctx.append(f"[{alvo} / {s['ferramenta']} / {s['timestamp']}]\n{conteudo[:2000]}")
+                blocos_ctx.append(f"[{alvo} / {s['ferramenta']} / {s['timestamp']}]\n{_smart_truncate(conteudo, 2000)}")
 
     vulns = []
     for alvo in alvos:
@@ -398,17 +483,40 @@ Responda de forma técnica, direta e baseando-se nos dados acima. Quando sugerir
             from agents.supervisor import supervisor
             config = {"configurable": {"thread_id": session_id}}
             prompt_completo = f"{sistema}\n\n---\nPergunta do pentester: {mensagem}"
-            resposta = supervisor.invoke({"messages": [("user", prompt_completo)]}, config=config)
-            conteudo = resposta["messages"][-1].content
-            if isinstance(conteudo, list):
-                texto = "\n".join(
-                    item.get("text", "") if isinstance(item, dict) else str(item)
-                    for item in conteudo
-                ).strip()
-            else:
-                texto = str(conteudo or "").strip()
-            storage.chat_salvar_mensagem(session_id, "assistant", texto)
-            q.put({"type": "chunk", "data": texto})
+            texto_final = ""
+            for event in supervisor.stream({"messages": [("user", prompt_completo)]}, config=config, stream_mode="updates"):
+                for node_name, node_data in event.items():
+                    messages = node_data.get("messages", [])
+                    if not messages:
+                        continue
+                    msg = messages[-1]
+                    tipo = getattr(msg, "type", "")
+
+                    if tipo == "ai":
+                        tool_calls = getattr(msg, "tool_calls", []) or []
+                        for tc in tool_calls:
+                            args = tc.get("args", {})
+                            alvo = args.get("alvo") or args.get("target") or ""
+                            descricao = f"→ {tc['name']}({alvo})" if alvo else f"→ {tc['name']}()"
+                            q.put({"type": "ai_decision", "data": descricao})
+                        conteudo = getattr(msg, "content", "")
+                        if isinstance(conteudo, list):
+                            conteudo = " ".join(i.get("text", "") if isinstance(i, dict) else str(i) for i in conteudo)
+                        conteudo = conteudo.strip()
+                        if conteudo and not tool_calls:
+                            primeira = conteudo.split("\n")[0][:120]
+                            q.put({"type": "ai_thinking", "data": primeira})
+                            texto_final = conteudo
+
+                    elif tipo == "tool":
+                        nome = getattr(msg, "name", "tool")
+                        conteudo = str(getattr(msg, "content", ""))
+                        linhas = [l for l in conteudo.splitlines() if l.strip()]
+                        resumo = linhas[0][:100] if linhas else "sem output"
+                        q.put({"type": "ai_thinking", "data": f"[{nome}] {resumo}"})
+
+            storage.chat_salvar_mensagem(session_id, "assistant", texto_final)
+            q.put({"type": "chunk", "data": texto_final})
             q.put({"type": "done"})
         except Exception as e:
             q.put({"type": "error", "data": str(e)})
@@ -502,20 +610,43 @@ def api_chat():
 
     def _run_agent():
         try:
-            import uuid
             from agents.supervisor import supervisor
             config = {"configurable": {"thread_id": session_id}}
-            resposta = supervisor.invoke({"messages": [("user", mensagem)]}, config=config)
-            conteudo = resposta["messages"][-1].content
-            if isinstance(conteudo, list):
-                texto = "\n".join(
-                    item.get("text", "") if isinstance(item, dict) else str(item)
-                    for item in conteudo
-                ).strip()
-            else:
-                texto = str(conteudo or "").strip()
-            storage.chat_salvar_mensagem(session_id, "assistant", texto)
-            q.put({"type": "chunk", "data": texto})
+            texto_final = ""
+            for event in supervisor.stream({"messages": [("user", mensagem)]}, config=config, stream_mode="updates"):
+                for node_name, node_data in event.items():
+                    messages = node_data.get("messages", [])
+                    if not messages:
+                        continue
+                    msg = messages[-1]
+                    tipo = getattr(msg, "type", "")
+
+                    if tipo == "ai":
+                        tool_calls = getattr(msg, "tool_calls", []) or []
+                        for tc in tool_calls:
+                            args = tc.get("args", {})
+                            alvo = args.get("alvo") or args.get("target") or ""
+                            descricao = f"→ {tc['name']}({alvo})" if alvo else f"→ {tc['name']}()"
+                            q.put({"type": "ai_decision", "data": descricao})
+                        conteudo = getattr(msg, "content", "")
+                        if isinstance(conteudo, list):
+                            conteudo = " ".join(i.get("text", "") if isinstance(i, dict) else str(i) for i in conteudo)
+                        conteudo = conteudo.strip()
+                        if conteudo and not tool_calls:
+                            # Resposta final — extrai só a primeira linha como thinking
+                            primeira = conteudo.split("\n")[0][:120]
+                            q.put({"type": "ai_thinking", "data": primeira})
+                            texto_final = conteudo
+
+                    elif tipo == "tool":
+                        nome = getattr(msg, "name", "tool")
+                        conteudo = str(getattr(msg, "content", ""))
+                        linhas = [l for l in conteudo.splitlines() if l.strip()]
+                        resumo = linhas[0][:100] if linhas else "sem output"
+                        q.put({"type": "ai_thinking", "data": f"[{nome}] {resumo}"})
+
+            storage.chat_salvar_mensagem(session_id, "assistant", texto_final)
+            q.put({"type": "chunk", "data": texto_final})
             q.put({"type": "done"})
         except Exception as e:
             q.put({"type": "error", "data": str(e)})
@@ -562,7 +693,7 @@ def api_analyze():
     for s in scans:
         conteudo = s.get("raw_output") or s.get("resultado") or ""
         if conteudo:
-            blocos.append(f"=== {s['ferramenta'].upper()} [{s['timestamp']}] ===\n{conteudo[:4000]}")
+            blocos.append(f"=== {s['ferramenta'].upper()} [{s['timestamp']}] ===\n{_smart_truncate(conteudo, 4000)}")
 
     if not blocos:
         abort(422, "Nenhum output disponível para análise.")
@@ -760,106 +891,79 @@ def _scan_alvo_pipeline(alvo_atual: str, emit, via_label: str = "autopilot"):
 
 
 def _autopilot_pipeline(alvo: str, q: queue.Queue):
-    """Pipeline PTES completo: subfinder → pipeline por subdomínio → relatório IA."""
+    """Pipeline autônomo real delegado dinamicamente ao LangGraph."""
     def emit(tipo, **kwargs):
         q.put({"type": tipo, **kwargs})
 
-    todos_alvos_scaneados = []
-
     try:
-        # ── Fase 1: Descoberta de subdomínios ─────────────────────────────
-        emit("phase_header", text="Fase 1 — Reconhecimento Passivo (subfinder)")
+        emit("phase_header", text=f"Iniciando Pentest Autônomo (LangGraph) → {alvo}")
+        
+        from agents.supervisor import supervisor
+        import uuid
+        session_id = f"auto_{uuid.uuid4().hex[:8]}"
+        config = {"configurable": {"thread_id": session_id}}
+        
+        prompt = f"""Inicie um pentest autônomo completo no alvo principal: {alvo}.
+É OBRIGATÓRIO seguir esta sequência e invocar as ferramentas/agentes listados:
+1. Reconhecimento Passivo: agente_subfinder.
+2. Reconhecimento Ativo: agente_nmap (scans rápidos e de serviço), agente_whatweb e agente_headers. Se descobrir subdomínios interessantes, analise-os.
+3. Enumeração: agente_gobuster (diretórios) e agente_nikto.
+4. Vulnerabilidades: agente_nuclei (foco em critical, high, medium).
 
-        raw_sf_lines = []
-        inicio = time.time()
-        try:
-            proc = subprocess.Popen(
-                ["stdbuf", "-oL", "-eL"] + _build_command("subfinder", alvo, {}),
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
-            )
-            while True:
-                fds = select.select([proc.stdout, proc.stderr], [], [], 1.0)[0]
-                for fd in fds:
-                    linha = fd.readline()
-                    if linha:
-                        texto = linha.decode("utf-8", errors="replace").rstrip("\n")
-                        raw_sf_lines.append(texto)
-                        emit("line", data=texto)
-                if proc.poll() is not None:
-                    for fd in [proc.stdout, proc.stderr]:
-                        for linha in fd:
-                            texto = linha.decode("utf-8", errors="replace").rstrip("\n")
-                            if texto:
-                                raw_sf_lines.append(texto)
-                                emit("line", data=texto)
-                    break
-            proc.wait()
-        except Exception as e:
-            emit("info", data=f"subfinder: {e}")
+IMPORTANTE: Repasse para todos os agentes que eles DEVEM invocar suas respectivas ferramentas com 'forcar_novo=True' (ex: executar_nmap(alvo="{alvo}", forcar_novo=True)). Isso garante que a varredura rode em tempo real sem ler o cache.
 
-        sf_raw = "\n".join(raw_sf_lines)
-        storage.salvar(alvo, "subfinder", sf_raw, parametros={"via": "autopilot"}, raw_output=sf_raw)
-        if _projeto_ativo:
-            storage.projeto_adicionar_alvo(_projeto_ativo["id"], alvo)
+Regra ABSOLUTA: Não pare e não emita o relatório final até invocar explicitamente o agente_nuclei e agente_nikto. Para cada chamada, explique seu raciocínio."""
+        emit("ai_thinking", data="Delegando orquestração para o Supervisor LLM...")
 
-        # Extrai subdomínios válidos do output
-        subdomains = sorted({
-            s.strip().lower() for s in raw_sf_lines
-            if s.strip() and alvo in s.strip() and s.strip() != alvo
-            and not s.strip().startswith("[") and " " not in s.strip()
-        })
-        emit("info", data=f"Subdomínios encontrados: {len(subdomains)} — {', '.join(subdomains[:10])}{'…' if len(subdomains)>10 else ''}")
+        with storage._conn() as conn:
+            row = conn.execute("SELECT MAX(id) as max_id FROM resultados").fetchone()
+            last_scan_id = row["max_id"] or 0
 
-        # Lista de alvos: domínio raiz + subdomínios (máx 10 para não explodir)
-        alvos_pipeline = [alvo] + subdomains[:10]
-        emit("phase_header", text=f"Iniciando pipeline para {len(alvos_pipeline)} alvo(s): {', '.join(alvos_pipeline)}")
+        for event in supervisor.stream({"messages": [("user", prompt)]}, config=config, stream_mode="updates"):
+            for node_name, node_data in event.items():
+                messages = node_data.get("messages", [])
+                if messages:
+                    msg = messages[-1]
+                    
+                    if getattr(msg, "type", "") == "ai":
+                        conteudo = getattr(msg, "content", "")
+                        if isinstance(conteudo, list):
+                            conteudo = "\n".join(item.get("text", "") if isinstance(item, dict) else str(item) for item in conteudo)
+                        
+                        if conteudo:
+                            emit("ai_reasoning", node=node_name, data=conteudo)
+                        
+                        if hasattr(msg, "tool_calls") and msg.tool_calls:
+                            for tc in msg.tool_calls:
+                                args_str = ", ".join(f"{k}={v}" for k, v in tc.get("args", {}).items())
+                                emit("cmd", data=f"[{node_name}] Invocando {tc['name']}({args_str})")
+                    elif getattr(msg, "type", "") == "tool":
+                        conteudo = getattr(msg, "content", "")
+                        if "[CACHE" in conteudo:
+                            emit("info", data=f"[{getattr(msg, 'name', 'tool')}] Utilizou cache local. Nenhum log bruto emitido.")
+                        emit("ai_reasoning", node=getattr(msg, "name", "tool"), data=f"Resultado recebido pelo supervisor:\n{conteudo}")
 
-        # ── Fase 2-6 para cada alvo ────────────────────────────────────────
-        for i, alvo_atual in enumerate(alvos_pipeline, 1):
-            emit("phase_header", text=f"[{i}/{len(alvos_pipeline)}] Pipeline PTES → {alvo_atual}")
-            _scan_alvo_pipeline(alvo_atual, emit)
-            todos_alvos_scaneados.append(alvo_atual)
-            emit("alvo_concluido", alvo=alvo_atual, index=i, total=len(alvos_pipeline))
+            # Faz o polling do banco de dados para pegar os outputs reais recém salvos
+            with storage._conn() as conn:
+                rows = conn.execute("SELECT * FROM resultados WHERE id > ? ORDER BY id ASC", (last_scan_id,)).fetchall()
+                for row in rows:
+                    scan = dict(row)
+                    emit("phase_done", ferramenta=scan["ferramenta"], alvo=scan["alvo"], scan_id=scan["id"], duracao_ms=0, exit_code=0)
+                    if scan["raw_output"]:
+                        emit("phase_header", text=f"Output Bruto — {scan['ferramenta'].upper()} ({scan['alvo']})")
+                        for line in scan["raw_output"].splitlines():
+                            emit("line", data=line)
+                    last_scan_id = scan["id"]
 
-        # ── Relatório final consolidado ────────────────────────────────────
-        emit("phase_header", text="Relatório Final Consolidado — IA analisando todos os alvos")
-        emit("ai_thinking", data="LLM consolidando resultados de todos os subdomínios…")
+        emit("phase_header", text="Relatório Final do Agente")
+        state = supervisor.get_state(config)
+        final_messages = state.values.get("messages", [])
+        if final_messages:
+            final_content = getattr(final_messages[-1], "content", "")
+            if final_content:
+                emit("final_report", data=final_content)
 
-        blocos = []
-        for a in todos_alvos_scaneados:
-            scans = storage.historico(a, limite=6)
-            for s in scans:
-                conteudo = s.get("raw_output") or s.get("resultado") or ""
-                if conteudo:
-                    blocos.append(f"=== {a} / {s['ferramenta'].upper()} ===\n{conteudo[:2000]}")
-
-        if blocos:
-            try:
-                from llm import criar_llm
-                llm = criar_llm("supervisor")
-                alvos_str = ", ".join(todos_alvos_scaneados)
-                prompt = f"""Você é um especialista em pentest. Analise o pipeline PTES completo abaixo para o domínio "{alvo}" e seus subdomínios ({alvos_str}) e produza um relatório consolidado:
-
-1. Resumo Executivo
-2. Superfície de Ataque (por subdomínio)
-3. Vulnerabilidades por severidade (Crítico / Alto / Médio)
-4. Top 3 Vetores de Ataque mais promissores
-5. Recomendações Imediatas por prioridade
-
-RESULTADOS:
-{chr(10).join(blocos[:20])}"""
-                resposta = llm.invoke(prompt)
-                analise = getattr(resposta, "content", str(resposta)).strip()
-                for a in todos_alvos_scaneados:
-                    scans = storage.historico(a, limite=6)
-                    for s in scans:
-                        storage.salvar_llm_analysis(s["id"], analise)
-                emit("final_report", data=analise)
-            except Exception as e:
-                emit("info", data=f"Relatório IA falhou: {e}")
-
-        emit("done", message=f"Pipeline PTES concluído para {len(todos_alvos_scaneados)} alvo(s).",
-             projeto_ativo=_projeto_ativo, alvos=todos_alvos_scaneados)
+        emit("done", message=f"Pipeline autônomo concluído para {alvo}.", projeto_ativo=_projeto_ativo, alvos=[alvo])
 
     except Exception as e:
         emit("error", data=f"Autopilot falhou: {e}")

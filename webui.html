@@ -56,6 +56,10 @@
     button.danger:hover { background:rgba(248,81,73,.25); }
     button.purple { background:rgba(188,140,255,.15); border-color:rgba(188,140,255,.4); color:var(--purple); }
     button.purple:hover { background:rgba(188,140,255,.25); }
+    button.yellow { background:rgba(210,153,34,.15); border-color:rgba(210,153,34,.4); color:var(--yellow); }
+    button.yellow:hover { background:rgba(210,153,34,.25); }
+    button.green { background:rgba(63,185,80,.15); border-color:rgba(63,185,80,.4); color:var(--green); }
+    button.green:hover { background:rgba(63,185,80,.25); }
     button:disabled { opacity:.4; cursor:not-allowed; }
 
     /* Tables */
@@ -83,6 +87,7 @@
     .sev.high     { background:rgba(240,136,62,.2); color:var(--orange); }
     .sev.medium   { background:rgba(210,153,34,.2); color:var(--yellow); }
     .sev.low      { background:rgba(63,185,80,.15); color:var(--green); }
+    .sev.info     { background:rgba(88,166,255,.15); color:var(--accent); }
     .sev.unknown  { background:var(--bg3); color:var(--muted); }
 
     /* Pages */
@@ -131,13 +136,28 @@
     .terminal-wrap { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
     .terminal-header { padding:8px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); }
     .terminal-header .t-title { flex:1; font-family:var(--mono); }
-    .terminal-body { background:#010409; padding:14px; font-family:var(--mono); font-size:12px; line-height:1.7; height:380px; overflow-y:auto; }
+    .terminal-header .sync-badge { font-size:11px; padding:2px 6px; border-radius:4px; white-space:nowrap; }
+    .terminal-header .sync-badge.synced { background:rgba(63,185,80,.2); color:var(--green); }
+    .terminal-header .sync-badge.syncing { background:rgba(210,153,34,.2); color:var(--yellow); animation:pulse 1.2s ease-in-out infinite; }
+    .terminal-tabs { display:flex; border-bottom:1px solid var(--border); padding:0; margin:0; }
+    .terminal-tabs .tab-btn { padding:6px 12px; font-size:11px; cursor:pointer; border:none; background:none; color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-1px; transition:all .15s; }
+    .terminal-tabs .tab-btn:hover { color:var(--text); }
+    .terminal-tabs .tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
+    .terminal-body { background:#010409; padding:14px; font-family:var(--mono); font-size:12px; line-height:1.7; overflow-y:auto; }
     .terminal-body .line { white-space:pre-wrap; word-break:break-all; }
     .terminal-body .line.cmd  { color:#79b8ff; }
     .terminal-body .line.err  { color:var(--red); }
     .terminal-body .line.ok   { color:var(--green); }
     .terminal-body .line.info { color:var(--muted); }
     .terminal-body .line.out  { color:#e6edf3; }
+    .terminal-body .line.separator { color:var(--purple); font-weight:700; border-top:1px solid var(--border); padding-top:8px; margin-top:8px; }
+    .terminal-body .line.status-final { color:var(--green); font-weight:600; border-top:1px solid var(--border); padding-top:8px; margin-top:8px; }
+    .terminal-body .line.status-final.error { color:var(--red); }
+    .terminal-body .line-with-time { display:flex; gap:8px; }
+    .terminal-body .line-time { color:var(--muted); font-size:10px; min-width:50px; flex-shrink:0; opacity:.6; }
+    .terminal-search { padding:8px 14px; border-bottom:1px solid var(--border); display:flex; gap:6px; align-items:center; }
+    .terminal-search input { flex:1; padding:4px 8px; font-size:11px; background:var(--bg3); border:1px solid var(--border); border-radius:4px; color:var(--text); }
+    .terminal-search .search-count { font-size:11px; color:var(--muted); }
     .cursor { display:inline-block; width:8px; height:14px; background:var(--accent); animation:blink .9s step-end infinite; vertical-align:text-bottom; margin-left:2px; }
     @keyframes blink { 50% { opacity:0; } }
     .status-dot { width:8px; height:8px; border-radius:50%; background:var(--muted); flex-shrink:0; }
@@ -526,20 +546,47 @@
 
           <div class="run-row" style="margin-top:12px;">
             <button class="primary" id="btn-run" onclick="runScan()">▶ Executar</button>
+            <button id="btn-pause" class="yellow" style="display:none;" onclick="pauseScan()">⏸ Pausar</button>
+            <button id="btn-resume" class="green" style="display:none;" onclick="resumeScan()">▶ Continuar</button>
             <button id="btn-stop" class="danger" onclick="stopScan()" disabled>■ Parar</button>
           </div>
         </div>
 
-        <!-- Terminal -->
-        <div class="terminal-wrap">
-          <div class="terminal-header">
-            <div class="status-dot" id="term-dot"></div>
-            <div class="t-title" id="term-title">Aguardando execução…</div>
-            <button onclick="clearTerminal()" style="font-size:11px;padding:3px 8px;">Limpar</button>
+        <!-- Terminais Duplos -->
+        <div style="display:flex; gap:12px; align-items:stretch; height:450px; margin-bottom:20px;">
+          <!-- Terminal 1: Scans -->
+          <div class="terminal-wrap" style="flex:1; display:flex; flex-direction:column; height:100%; min-width:0;">
+            <div class="terminal-header">
+              <div class="status-dot" id="term-dot-scans"></div>
+              <div class="t-title" id="term-title-scans">Terminal de Execução</div>
+              <div class="sync-badge" id="sync-badge" style="display:none;">✓ Sincronizado</div>
+              <button onclick="clearTerminal('scans')" style="font-size:11px;padding:3px 8px;">Limpar</button>
+            </div>
+            <div class="terminal-tabs" id="term-tabs-scans">
+              <button class="tab-btn active" onclick="switchTermTab('raw','scans',this)">🔴 Raw Output</button>
+              <button class="tab-btn" onclick="switchTermTab('search','scans',this)">🔍 Buscar</button>
+            </div>
+            <div class="terminal-search" id="term-search-scans" style="display:none;">
+              <input type="text" id="search-input-scans" placeholder="Buscar nas linhas..." onkeyup="filterTerminalLines('scans')">
+              <span class="search-count" id="search-count-scans"></span>
+            </div>
+            <div class="terminal-body" id="terminal-scans" style="flex:1;">
+              <span class="line info">Aguardando execução…</span>
+              <span class="cursor"></span>
+            </div>
           </div>
-          <div class="terminal-body" id="terminal">
-            <span class="line info">QuarkScan Web UI — configure o scan acima e clique em Executar.</span>
-            <span class="cursor"></span>
+
+          <!-- Terminal 2: AI -->
+          <div class="terminal-wrap" style="flex:1; display:flex; flex-direction:column; height:100%; min-width:0;">
+            <div class="terminal-header">
+              <div class="status-dot" id="term-dot-ai"></div>
+              <div class="t-title" id="term-title-ai">Raciocínio da IA</div>
+              <button onclick="clearTerminal('ai')" style="font-size:11px;padding:3px 8px;">Limpar</button>
+            </div>
+            <div class="terminal-body" id="terminal-ai" style="flex:1;">
+              <span class="line info">Aguardando IA…</span>
+              <span class="cursor"></span>
+            </div>
           </div>
         </div>
 
@@ -623,7 +670,7 @@
           <div class="stat-card blue"><div class="num" id="s-scans">—</div><div class="lbl">Scans</div></div>
           <div class="stat-card green"><div class="num" id="s-alvos">—</div><div class="lbl">Alvos únicos</div></div>
           <div class="stat-card orange"><div class="num" id="s-vulns">—</div><div class="lbl">Vulnerabilidades</div></div>
-          <div class="stat-card red"><div class="num" id="s-criticas">—</div><div class="lbl">Críticas / Altas</div></div>
+          <div class="stat-card"><div class="num" id="s-sev-breakdown" style="font-size:20px;">—</div><div class="lbl">C / A / M / B / I</div></div>
         </div>
         <div class="section-title" style="margin-top:24px;">Últimos 20 Scans</div>
         <table class="scan-table">
@@ -1014,6 +1061,9 @@ function pwTab(name, el) {
 function renderPwOverview() {
   const vulnsCrit = _pwVulnsAll.filter(v => v.severidade === 'critical').length;
   const vulnsHigh = _pwVulnsAll.filter(v => v.severidade === 'high').length;
+  const vulnsMed  = _pwVulnsAll.filter(v => v.severidade === 'medium').length;
+  const vulnsLow  = _pwVulnsAll.filter(v => v.severidade === 'low').length;
+  const vulnsInfo = _pwVulnsAll.filter(v => v.severidade === 'info').length;
   const tools = new Set(_pwScansAll.map(s => s.ferramenta));
 
   document.getElementById('pw-stats').innerHTML = `
@@ -1021,6 +1071,9 @@ function renderPwOverview() {
     <div class="pw-stat"><div class="n" style="color:var(--green)">${_pwScansAll.length}</div><div class="l">Scans</div></div>
     <div class="pw-stat"><div class="n" style="color:var(--red)">${vulnsCrit}</div><div class="l">Críticas</div></div>
     <div class="pw-stat"><div class="n" style="color:var(--orange)">${vulnsHigh}</div><div class="l">Altas</div></div>
+    <div class="pw-stat"><div class="n" style="color:var(--yellow)">${vulnsMed}</div><div class="l">Médias</div></div>
+    <div class="pw-stat"><div class="n" style="color:var(--green)">${vulnsLow}</div><div class="l">Baixas</div></div>
+    <div class="pw-stat"><div class="n" style="color:var(--accent)">${vulnsInfo}</div><div class="l">Info</div></div>
     <div class="pw-stat"><div class="n" style="color:var(--purple)">${tools.size}</div><div class="l">Ferramentas</div></div>`;
 
   document.getElementById('pw-alvo-cards').innerHTML = _pwAlvosAll.length
@@ -1110,8 +1163,8 @@ function renderPwVulns() {
     return;
   }
   // Ordena por severidade
-  const ordem = {critical:0, high:1, medium:2, low:3, unknown:4};
-  const sorted = [..._pwVulnsAll].sort((a,b) => (ordem[a.severidade]??5) - (ordem[b.severidade]??5));
+      const ordem = {critical:0, high:1, medium:2, low:3, info:4, unknown:5};
+      const sorted = [..._pwVulnsAll].sort((a,b) => (ordem[a.severidade]??6) - (ordem[b.severidade]??6));
   el.innerHTML = sorted.map(v => `
     <div class="pw-vuln-row">
       <span>${sevBadge(v.severidade)}</span>
@@ -1186,6 +1239,10 @@ async function pwEnviarMensagem() {
             resposta = msg.data;
             bubbleEl.textContent = resposta;
             document.getElementById('pw-chat-msgs').scrollTop = 9999;
+          } else if (msg.type === 'ai_thinking') {
+            termLine(`🤔 ${msg.data}`, 'ai-think', 'ai');
+          } else if (msg.type === 'ai_decision') {
+            termLine(`✅ ${msg.data}`, 'ai-dec', 'ai');
           } else if (msg.type === 'error') {
             bubbleEl.innerHTML = `<span style="color:var(--red)">Erro: ${escHtml(msg.data)}</span>`;
           }
@@ -1390,7 +1447,12 @@ async function loadStats() {
     document.getElementById('s-scans').textContent    = s.total_scans;
     document.getElementById('s-alvos').textContent    = s.total_alvos;
     document.getElementById('s-vulns').textContent    = s.total_vulns;
-    document.getElementById('s-criticas').textContent = `${s.vulns_criticas}/${s.vulns_altas}`;
+    document.getElementById('s-sev-breakdown').innerHTML =
+        `<span style="color:var(--red)" title="Críticas">${s.vulns_criticas}</span> <span style="color:var(--muted);font-size:14px;">/</span> ` +
+        `<span style="color:var(--orange)" title="Altas">${s.vulns_altas}</span> <span style="color:var(--muted);font-size:14px;">/</span> ` +
+        `<span style="color:var(--yellow)" title="Médias">${s.vulns_medias}</span> <span style="color:var(--muted);font-size:14px;">/</span> ` +
+        `<span style="color:var(--green)" title="Baixas">${s.vulns_baixas}</span> <span style="color:var(--muted);font-size:14px;">/</span> ` +
+        `<span style="color:var(--accent)" title="Informativas">${s.vulns_info}</span>`;
   } catch {}
 }
 
@@ -1703,13 +1765,13 @@ function runAutopilot() {
   if (activeSSE) { activeSSE.close(); activeSSE = null; }
   lastRunAlvo = alvo;
 
-  document.getElementById('btn-run-auto').disabled = true;
-  document.getElementById('analyze-bar').style.display = 'none';
-  document.getElementById('ai-result-wrap').style.display = 'none';
+  startUI();
 
   clearTerminal();
-  setTermStatus('running');
-  document.getElementById('term-title').textContent = `[AUTOPILOT] PTES → ${alvo}`;
+  setTermStatus('running', 'scans');
+  setTermStatus('running', 'ai');
+  document.getElementById('term-title-scans').textContent = `[AUTOPILOT] Scans → ${alvo}`;
+  document.getElementById('term-title-ai').textContent = `[AUTOPILOT] IA Roteando → ${alvo}`;
 
   const sse = new EventSource(`/api/autopilot?alvo=${encodeURIComponent(alvo)}`);
   activeSSE = sse;
@@ -1717,40 +1779,45 @@ function runAutopilot() {
   sse.onmessage = (e) => {
     const msg = JSON.parse(e.data);
     switch (msg.type) {
-      case 'phase_header': termLine(`\n══ ${msg.text} ══`, 'phase'); break;
-      case 'phase_start':  termLine(`▶ ${msg.ferramenta}`, 'cmd'); break;
-      case 'cmd':          termLine(`$ ${msg.data}`, 'cmd'); break;
-      case 'line':         termLine(msg.data, 'out'); break;
-      case 'ai_thinking':  termLine(`🤔 ${msg.data}`, 'ai-think'); break;
-      case 'ai_decision':  termLine(`✅ ${msg.data}`, 'ai-dec'); break;
-      case 'info':         termLine(`ℹ ${msg.data}`, 'info'); break;
-      case 'phase_done':   termLine(`✓ ${msg.ferramenta}${msg.alvo ? ' ['+msg.alvo+']' : ''} concluído em ${(msg.duracao_ms/1000).toFixed(1)}s — scan #${msg.scan_id}`, 'ok'); break;
-      case 'alvo_concluido': termLine(`\n◆ Alvo ${msg.index}/${msg.total} concluído: ${msg.alvo}`, 'phase'); break;
+      case 'phase_header': termLine(`\n══ ${msg.text} ══`, 'phase', 'scans'); termLine(`\n══ ${msg.text} ══`, 'phase', 'ai'); break;
+      case 'phase_start':  termLine(`▶ ${msg.ferramenta}`, 'cmd', 'scans'); break;
+      case 'cmd':          termLine(`$ ${msg.data}`, 'cmd', 'scans'); break;
+      case 'line':         termLine(msg.data, 'out', 'scans'); break;
+      case 'ai_thinking':  termLine(`🤔 ${msg.data}`, 'ai-think', 'ai'); break;
+      case 'ai_decision':  termLine(`✅ ${msg.data}`, 'ai-dec', 'ai'); break;
+      case 'info':         termLine(`ℹ ${msg.data}`, 'info', 'scans'); break;
+      case 'phase_done':   termLine(`✓ ${msg.ferramenta}${msg.alvo ? ' ['+msg.alvo+']' : ''} concluído em ${(msg.duracao_ms/1000).toFixed(1)}s — scan #${msg.scan_id}`, 'ok', 'scans'); break;
+      case 'ai_reasoning': termLine(`\n[${msg.node}] 🧠 Raciocínio:\n${msg.data}`, 'ai-think', 'ai'); break;
+      case 'alvo_concluido': termLine(`\n◆ Alvo ${msg.index}/${msg.total} concluído: ${msg.alvo}`, 'phase', 'scans'); termLine(`\n◆ Alvo ${msg.index}/${msg.total} concluído: ${msg.alvo}`, 'phase', 'ai'); break;
       case 'final_report':
         document.getElementById('ai-result-wrap').style.display = 'block';
         document.getElementById('ai-result-text').textContent = msg.data;
         document.getElementById('ai-dot').className = 'status-dot done';
         break;
       case 'done':
-        termLine('\n⚡ Pipeline PTES concluído.', 'ok');
-        setTermStatus('done');
-        document.getElementById('btn-run-auto').disabled = false;
+        termLine('\n⚡ Pipeline PTES concluído.', 'ok', 'scans');
+        termLine('\n⚡ Processo autônomo finalizado.', 'ok', 'ai');
+        setTermStatus('done', 'scans');
+        setTermStatus('done', 'ai');
+        stopUI();
         document.getElementById('analyze-bar').style.display = 'flex';
         sse.close(); activeSSE = null;
         loadAlvos(); loadStats(); loadDashScans();
         break;
       case 'error':
-        termLine(`\n✗ Erro: ${msg.data}`, 'err');
-        setTermStatus('error');
-        document.getElementById('btn-run-auto').disabled = false;
+        termLine(`\n✗ Erro: ${msg.data}`, 'err', 'scans');
+        termLine(`\n✗ Erro: ${msg.data}`, 'err', 'ai');
+        setTermStatus('error', 'scans');
+        setTermStatus('error', 'ai');
+        stopUI();
         sse.close(); activeSSE = null;
         break;
     }
   };
 
   sse.onerror = () => {
-    if (activeSSE) { termLine('\n✗ Conexão SSE perdida.', 'err'); setTermStatus('error'); }
-    document.getElementById('btn-run-auto').disabled = false;
+    if (activeSSE) { termLine('\n✗ Conexão SSE perdida.', 'err', 'scans'); setTermStatus('error', 'scans'); }
+    stopUI();
     sse.close(); activeSSE = null;
   };
 }
@@ -1767,13 +1834,29 @@ function getOpts() {
   return opts;
 }
 
-function termLine(text, cls='out') {
-  const term = document.getElementById('terminal');
+function termLine(text, cls='out', target='scans', timestamp=null) {
+  const term = document.getElementById('terminal-' + target);
+  if (!term) return;
   const cursor = term.querySelector('.cursor');
   if (cursor) cursor.remove();
+
   const el = document.createElement('div');
   el.className = `line ${cls}`;
-  el.textContent = text;
+
+  // Se houver timestamp, exibir lado a lado
+  if (timestamp) {
+    el.className += ' line-with-time';
+    const timeEl = document.createElement('span');
+    timeEl.className = 'line-time';
+    timeEl.textContent = `[${timestamp}]`;
+    const textEl = document.createElement('span');
+    textEl.textContent = text;
+    el.appendChild(timeEl);
+    el.appendChild(textEl);
+  } else {
+    el.textContent = text;
+  }
+
   term.appendChild(el);
   const c = document.createElement('span');
   c.className = 'cursor';
@@ -1781,17 +1864,105 @@ function termLine(text, cls='out') {
   term.scrollTop = term.scrollHeight;
 }
 
-function clearTerminal() {
-  const term = document.getElementById('terminal');
-  term.innerHTML = '<span class="cursor"></span>';
+function switchTermTab(tab, target, el) {
+  const tabs = el.parentElement.querySelectorAll('.tab-btn');
+  tabs.forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+
+  const search = document.getElementById(`term-search-${target}`);
+  if (tab === 'raw') {
+    search.style.display = 'none';
+    document.getElementById(`terminal-${target}`).style.display = 'block';
+  } else if (tab === 'search') {
+    search.style.display = 'flex';
+    document.getElementById(`terminal-${target}`).style.display = 'block';
+  }
 }
 
-function setTermStatus(status) {
-  const dot   = document.getElementById('term-dot');
-  const title = document.getElementById('term-title');
+function filterTerminalLines(target) {
+  const input = document.getElementById(`search-input-${target}`);
+  const term = document.getElementById(`terminal-${target}`);
+  const query = input.value.toLowerCase();
+  const lines = term.querySelectorAll('.line:not(.cursor)');
+  let count = 0;
+
+  lines.forEach(line => {
+    const text = line.textContent.toLowerCase();
+    if (query === '' || text.includes(query)) {
+      line.style.display = '';
+      if (query && text.includes(query)) count++;
+    } else {
+      line.style.display = 'none';
+    }
+  });
+
+  const countEl = document.getElementById(`search-count-${target}`);
+  if (query) {
+    countEl.textContent = `${count} resultado(s)`;
+  } else {
+    countEl.textContent = '';
+  }
+}
+
+function clearTerminal(target) {
+  if (target) {
+    document.getElementById('terminal-' + target).innerHTML = '<span class="cursor"></span>';
+  } else {
+    document.getElementById('terminal-scans').innerHTML = '<span class="cursor"></span>';
+    document.getElementById('terminal-ai').innerHTML = '<span class="cursor"></span>';
+  }
+}
+
+function setTermStatus(status, target='scans') {
+  const dot   = document.getElementById('term-dot-' + target);
+  const title = document.getElementById('term-title-' + target);
+  if (!dot || !title) return;
   dot.className   = `status-dot ${status}`;
-  const labels = {running:'Executando…', done:'Concluído', error:'Erro', '':'Aguardando'};
-  if (status !== 'running') title.textContent = labels[status] || status;
+  const labels = {running:'Executando…', paused:'Pausado', done:'Concluído', error:'Erro', '':'Aguardando'};
+  if (status !== 'running' && status !== 'paused') title.textContent = labels[status] || status;
+}
+
+function startUI() {
+  document.getElementById('btn-run').disabled = true;
+  document.getElementById('btn-run-auto').disabled = true;
+  document.getElementById('btn-pause').style.display = 'inline-block';
+  document.getElementById('btn-resume').style.display = 'none';
+  document.getElementById('btn-stop').disabled = false;
+  document.getElementById('analyze-bar').style.display = 'none';
+  document.getElementById('ai-result-wrap').style.display = 'none';
+}
+
+function stopUI() {
+  document.getElementById('btn-pause').style.display = 'none';
+  document.getElementById('btn-resume').style.display = 'none';
+  document.getElementById('btn-stop').disabled = true;
+  document.getElementById('btn-run').disabled = false;
+  document.getElementById('btn-run-auto').disabled = false;
+}
+
+async function pauseScan() {
+  await fetch('/api/process/pause', { method: 'POST' });
+  document.getElementById('btn-pause').style.display = 'none';
+  document.getElementById('btn-resume').style.display = 'inline-block';
+  termLine('\n⏸ Scan pausado (aguardando liberação)...', 'info', 'scans');
+  setTermStatus('paused', 'scans');
+}
+
+async function resumeScan() {
+  await fetch('/api/process/resume', { method: 'POST' });
+  document.getElementById('btn-resume').style.display = 'none';
+  document.getElementById('btn-pause').style.display = 'inline-block';
+  termLine('\n▶ Scan retomado...', 'info', 'scans');
+  setTermStatus('running', 'scans');
+}
+
+async function stopScan() {
+  await fetch('/api/process/stop', { method: 'POST' });
+  if (activeSSE) { activeSSE.close(); activeSSE = null; }
+  stopUI();
+  termLine('\n■ Scan interrompido pelo usuário.', 'err', 'scans');
+  setTermStatus('', 'scans');
+  setTermStatus('', 'ai');
 }
 
 function runScan() {
@@ -1801,14 +1972,13 @@ function runScan() {
   if (activeSSE) { activeSSE.close(); activeSSE = null; }
 
   lastRunAlvo = alvo;
-  document.getElementById('btn-run').disabled    = true;
-  document.getElementById('btn-stop').disabled   = false;
-  document.getElementById('analyze-bar').style.display = 'none';
-  document.getElementById('ai-result-wrap').style.display = 'none';
+  startUI();
 
   clearTerminal();
-  setTermStatus('running');
-  document.getElementById('term-title').textContent = `${currentTool} → ${alvo}`;
+  setTermStatus('running', 'scans');
+  setTermStatus('', 'ai');
+  document.getElementById('term-title-scans').textContent = `${currentTool} → ${alvo}`;
+  document.getElementById('term-title-ai').textContent = `(Scan Manual — Sem IA)`;
 
   const opts   = getOpts();
   const params = new URLSearchParams({alvo, ferramenta: currentTool, ...opts});
@@ -1817,42 +1987,64 @@ function runScan() {
 
   sse.onmessage = (e) => {
     const msg = JSON.parse(e.data);
-    if (msg.type === 'cmd')       { termLine(`$ ${msg.data}`, 'cmd'); }
-    else if (msg.type === 'line') { termLine(msg.data, 'out'); }
+    if (msg.type === 'cmd') {
+      termLine(`$ ${msg.data}`, 'cmd', 'scans');
+    }
+    else if (msg.type === 'separator') {
+      termLine(`${msg.data}`, 'separator', 'scans');
+    }
+    else if (msg.type === 'line') {
+      termLine(msg.data, 'out', 'scans', msg.timestamp);
+    }
+    else if (msg.type === 'status_final') {
+      // Exibir status final claro
+      const dur = (msg.duracao_ms / 1000).toFixed(1);
+      let statusText = '';
+      let statusClass = 'status-final';
+
+      if (msg.status === 'sucesso' && msg.exit_code === 0) {
+        statusText = `✓ SUCESSO — ${msg.linhas} linhas capturadas, ${dur}s, exit code 0`;
+      } else if (msg.exit_code !== 0) {
+        statusText = `⚠️ PARCIAL/ERRO — ${msg.linhas} linhas capturadas, exit code ${msg.exit_code}`;
+        statusClass += ' error';
+      } else {
+        statusText = `✓ SUCESSO — ${msg.linhas} linhas capturadas em ${dur}s`;
+      }
+
+      termLine(statusText, statusClass, 'scans');
+
+      // Mostrar badge de sincronização
+      if (msg.sincronizado) {
+        const badge = document.getElementById('sync-badge');
+        badge.style.display = 'inline-block';
+        badge.className = 'sync-badge synced';
+        badge.textContent = '✓ Sincronizado com BD';
+      }
+    }
     else if (msg.type === 'done') {
       const dur = (msg.duracao_ms / 1000).toFixed(1);
-      termLine(`\n✓ Concluído em ${dur}s — exit code ${msg.exit_code} — scan #${msg.scan_id}`, 'ok');
-      setTermStatus('done');
-      document.getElementById('btn-run').disabled  = false;
-      document.getElementById('btn-stop').disabled = true;
+      termLine(`Scan #${msg.scan_id} — ${dur}s`, 'ok', 'scans');
+      setTermStatus('done', 'scans');
+      stopUI();
       document.getElementById('analyze-bar').style.display = 'flex';
       document.getElementById('analyze-info').textContent =
         `Scan #${msg.scan_id} salvo. Deseja gerar análise IA sobre todos os resultados de "${alvo}"?`;
       sse.close(); activeSSE = null;
       loadAlvos(); loadStats(); loadDashScans();
-    } else if (msg.type === 'error') {
-      termLine(`\n✗ Erro: ${msg.data}`, 'err');
-      setTermStatus('error');
-      document.getElementById('btn-run').disabled  = false;
-      document.getElementById('btn-stop').disabled = true;
+    }
+    else if (msg.type === 'error') {
+      termLine(`❌ ERRO: ${msg.data}`, 'err', 'scans');
+      setTermStatus('error', 'scans');
+      stopUI();
       sse.close(); activeSSE = null;
     }
   };
 
   sse.onerror = () => {
-    if (activeSSE) { termLine('\n✗ Conexão SSE perdida.', 'err'); setTermStatus('error'); }
-    document.getElementById('btn-run').disabled  = false;
-    document.getElementById('btn-stop').disabled = true;
+    if (activeSSE) { termLine('\n✗ Conexão SSE perdida.', 'err', 'scans'); setTermStatus('error', 'scans'); }
+    stopUI();
     sse.close(); activeSSE = null;
   };
-}
-
-function stopScan() {
-  if (activeSSE) { activeSSE.close(); activeSSE = null; }
-  termLine('\n■ Scan interrompido pelo usuário.', 'info');
-  setTermStatus('');
-  document.getElementById('btn-run').disabled  = false;
-  document.getElementById('btn-stop').disabled = true;
 }
 
 // ── Análise IA ─────────────────────────────────────────────────────────────
@@ -2074,6 +2266,10 @@ async function enviarMensagem() {
             resposta = msg.data;
             bubbleEl.textContent = resposta;
             scrollChatBottom();
+          } else if (msg.type === 'ai_thinking') {
+            termLine(`🤔 ${msg.data}`, 'ai-think', 'ai');
+          } else if (msg.type === 'ai_decision') {
+            termLine(`✅ ${msg.data}`, 'ai-dec', 'ai');
           } else if (msg.type === 'done') {
             loadChatSessoes();
           } else if (msg.type === 'error') {

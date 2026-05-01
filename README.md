@@ -198,6 +198,128 @@ O dashboard oferece:
 
 ---
 
+## 🎯 Análise de Usabilidade — Pontos de Melhoria
+
+### Problema Principal: Confiança no Output do Terminal
+
+Ao usar a Web UI, o maior incômodo é a **incerteza sobre a autenticidade do output exibido no terminal**. Há lacunas que dificultam confiar que o que aparece é realmente o resultado direto da ferramenta:
+
+1. **Sem indicação visual que o output foi sincronizado com o banco de dados**
+2. **Falta de separação clara entre fases, timestamps e duração de cada ferramenta**
+3. **Confusão entre output raw (ferramenta) vs. processado (IA)**
+
+---
+
+### Melhorias Recomendadas (por prioridade)
+
+#### 🔴 **Alta Prioridade**
+
+**1. Indicador "Sincronizado com BD" no Terminal**
+- Badge no header do terminal: `✓ Sincronizado com banco` ou `⏳ Sincronizando...`
+- Após o scan terminar (`done`), fazer polling do banco para confirmar que os dados foram salvos
+- Se houver divergência entre streamado e BD, alertar com ⚠️
+
+**2. Terminal com Separadores Visuais e Timestamps**
+```
+═══════════════════════════════════════════════════════
+🔧 NMAP — Reconhecimento de Portas (11:22:45)
+═══════════════════════════════════════════════════════
+[11:22:45] Starting nmap scan...
+...
+[11:25:10] ✓ Concluído em 2m 25s
+```
+- Cada ferramenta/fase principal com divider colorido
+- Timestamp no início e fim: `[HH:MM:SS] → [HH:MM:SS] ✓ 2m 15s`
+- Linhas mais respeitáveis e scanneáveis
+
+**3. Abas no Terminal: Raw / Processado / Armazenado**
+- `🔴 Raw Output` — output bruto em tempo real (stream SSE)
+- `🟡 Processado` — análise/estruturação pela IA (quando disponível)
+- `🟢 Armazenado` — versão final confirmada no banco de dados
+- Cores diferentes ajudam a entender em qual estágio você está
+
+**4. Status Final Claro e Destacado**
+```
+✓ SUCESSO — 1200 linhas capturadas, 0 erros, exit code 0
+ou
+⚠️ PARCIAL — 340 linhas capturadas, 3 avisos (timeout em 2 hosts)
+ou
+❌ FALHA — Exit code 1, ferramenta não encontrada
+```
+- Painel separado com erros/warnings do stderr
+- Recomendações baseadas no tipo de falha
+
+**5. Busca e Filtro no Detail Panel**
+- Campo de search dentro do output (filtra linhas em tempo real)
+- Botão "Copiar resultado" com 1 clique
+- Opção de visualizar como tabela (se dados estruturados)
+
+---
+
+#### 🟡 **Média Prioridade**
+
+**6. Queue Visual de Scans Simultâneos**
+```
+[▶ nmap — Em execução (3m 22s)]
+[⏳ gobuster — Aguardando (posição 1 na fila)]
+[⏳ nikto — Aguardando (posição 2 na fila)]
+```
+- Mostra qual scan está rodando vs. aguardando
+
+**7. Validator Visual de Parâmetros (Real-time)**
+```
+✓ Alvo válido (exemplo.com)
+⚠️ Porta inválida (deve ser 1-65535)
+✓ Ferramenta encontrada no sistema
+```
+- Feedback imediato ao digitar parâmetros
+- Evita erro "validação falhou" após clicar em "Rodar"
+
+**8. Breadcrumb / Contexto Visual**
+- Em abas do workspace: `Projetos > ACME > Scans do alvo X`
+- Reduz desorientação quando há muitas abas
+
+**9. Citations na IA Chat do Projeto**
+- Respostas incluem `[citado do scan nmap #12345]`
+- Ao passar mouse, expande snippet do dado
+- Rastreabilidade total de onde a IA tirou a informação
+
+**10. Loading States Consistentes**
+- Spinner/skeleton para operações > 500ms
+- Alguns endpoints atualmente faltam feedback visual
+
+---
+
+#### 🟢 **Baixa Prioridade**
+
+**11. Hash de Integridade por Linha (Segurança avançada)**
+- Hash SHA-256 (primeiros 8 chars) ao lado de cada linha
+- Permite validar integridade de linhas específicas contra o banco
+
+**12. Modo "Replay" (Verificação Post-Hoc)**
+- Botão "Verificar Integridade" no detail panel
+- Reconstrói output a partir do banco e compara com o streamado
+- Mostra discrepâncias exatas
+
+**13. Acessibilidade (WCAG)**
+- Alternativas de texto para cores (ícones, padrões, labels)
+
+---
+
+### Recomendação Executiva
+
+O **maior ganho de confiança e usabilidade** virá de implementar os 5 items de **Alta Prioridade** juntos:
+
+1. **Badge "Sincronizado com BD"** — valida que o que você vê é real ✅
+2. **Separadores e timestamps** — deixa óbvio o timeline e origem de cada linha 🕐
+3. **Abas Raw/Processado/Armazenado** — elimina confusão sobre qual versão está sendo exibida 📑
+4. **Status final claro** — feedback inequívoco do resultado (sucesso/aviso/erro) 🎯
+5. **Busca no output** — usuário pode investigar resultados rapidamente 🔎
+
+Essas mudanças juntas **resolvem 80% da incerteza** sobre a autenticidade e clareza do que está sendo exibido na Web UI.
+
+---
+
 ### Pipeline autônomo (LangGraph StateGraph)
 
 Execute todas as fases de reconhecimento em sequência com um único comando. O pipeline é construído como um **grafo de estado** com fallback automático e checkpointing.
